@@ -41,7 +41,7 @@ namespace JpegXLFileTypePlugin.Interop
 
                 if (i >= 30)
                 {
-                    // This code will produce a lossy encoding value of 0.01 when the quality is 100.
+                    // This code will produce a lossy encoding value of 0.1 when the quality is 100.
                     // The lossless encoding value 0.0 will be set when lossless mode is enabled.
                     distance = 0.1f + ((100 - i) * 0.09f);
                 }
