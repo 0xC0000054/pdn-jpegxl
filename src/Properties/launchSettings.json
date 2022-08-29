@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "JxlFileType": {
+      "commandName": "Executable",
+      "executablePath": "D:\\Program Files\\paint.net\\paintdotnet.exe",
+      "nativeDebugging": true
+    }
+  }
+}
