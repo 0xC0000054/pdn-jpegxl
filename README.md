@@ -1,6 +1,6 @@
 # pdn-jpegxl
 
-A [Paint.NET](http://www.getpaint.net) filetype plugin that loads and saves JPEG XL images.
+A [Paint.NET](http://www.getpaint.net) filetype plugin that loads and saves JPEG XL images using [libjxl](https://github.com/libjxl/libjxl).
 
 ## Installation
 
