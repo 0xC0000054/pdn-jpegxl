@@ -14,17 +14,21 @@
 
   <ItemGroup>
     <Compile Remove="ARM64\**" />
+    <Compile Remove="Debug\**" />
     <Compile Remove="JxlFileTypeIO\**" />
     <Compile Remove="Release\**" />
     <Compile Remove="x64\**" />
     <EmbeddedResource Remove="ARM64\**" />
+    <EmbeddedResource Remove="Debug\**" />
     <EmbeddedResource Remove="JxlFileTypeIO\**" />
     <EmbeddedResource Remove="Release\**" />
     <EmbeddedResource Remove="x64\**" />
     <None Remove="ARM64\**" />
+    <None Remove="Debug\**" />
     <None Remove="JxlFileTypeIO\**" />
     <None Remove="Release\**" />
     <None Remove="x64\**" />
+    <Page Remove="Debug\**" />
     <Page Remove="Release\**" />
   </ItemGroup>
 
