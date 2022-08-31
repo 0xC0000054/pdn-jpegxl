@@ -17,20 +17,6 @@
 #include <stdexcept>
 #include <vector>
 
-namespace
-{
-    bool ExtraChannelIsAlpha(const JxlDecoder* dec, const JxlBasicInfo& basicInfo)
-    {
-        if (basicInfo.alpha_bits != 0 && basicInfo.num_extra_channels == 1)
-        {
-
-        }
-
-        return false;
-    }
-
-}
-
 struct DecoderContext
 {
     JxlDecoderPtr dec;
