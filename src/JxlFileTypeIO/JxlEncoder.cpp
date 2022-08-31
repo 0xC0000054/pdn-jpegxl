@@ -371,7 +371,7 @@ EncoderStatus EncoderWriteImage(
 
         if (processOutputStatus != JXL_ENC_SUCCESS)
         {
-            SetErrorMessage(errorInfo, "JxlEncoderAddImageFrame failed.");
+            SetErrorMessage(errorInfo, "JxlEncoderProcessOutput failed.");
             return EncoderStatus::EncodeError;
         }
 
