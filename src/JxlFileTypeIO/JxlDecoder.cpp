@@ -17,56 +17,65 @@
 #include <stdexcept>
 #include <vector>
 
-struct DecoderContext
+namespace
 {
-    JxlDecoderPtr dec;
-    std::vector<uint8_t> pixelData;
-    std::vector<uint8_t> exif;
-    std::vector<uint8_t> xmp;
-    JxlBasicInfo basicInfo;
-    JxlPixelFormat format;
-
-    DecoderContext()
-        : dec(JxlDecoderCreate(nullptr)), pixelData(), exif(), xmp(), basicInfo{},
-        format{4, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0 }
+    struct ImageOutState
     {
-        if (!dec)
+        BitmapData outLayerData;
+        uint32_t numberOfChannels;
+    };
+
+    void ImageOutCallback(void* opaque, size_t x, size_t y, size_t num_pixels, const void* pixels)
+    {
+        ImageOutState* state = static_cast<ImageOutState*>(opaque);
+
+        uint8_t* destScan0 = state->outLayerData.scan0;
+        const size_t destStride = static_cast<size_t>(state->outLayerData.stride);
+
+        const uint32_t srcChannelCount = state->numberOfChannels;
+
+        const uint8_t* src = static_cast<const uint8_t*>(pixels);
+        ColorBgra* dest = reinterpret_cast<ColorBgra*>(destScan0 + (y * destStride) + (x * sizeof(ColorBgra)));
+
+        for (size_t i = 0; i < num_pixels; i++)
         {
-            // Failed to create the decoder instance.
-            throw std::bad_alloc();
+            switch (srcChannelCount)
+            {
+            case 1: // Gray
+                dest->r = dest->g = dest->b = src[0];
+                dest->a = 255;
+                break;
+            case 2: // Gray + Alpha
+                dest->r = dest->g = dest->b = src[0];
+                dest->a = src[1];
+                break;
+            case 3: // RGB
+                dest->r = src[0];
+                dest->g = src[1];
+                dest->b = src[2];
+                dest->a = 255;
+                break;
+            case 4: // RGBA
+                dest->r = src[0];
+                dest->g = src[1];
+                dest->b = src[2];
+                dest->a = src[3];
+                break;
+            }
+
+            src += srcChannelCount;
+            dest++;
         }
     }
-};
-
-DecoderContext* CreateDecoderContext()
-{
-    try
-    {
-        return new DecoderContext();
-    }
-    catch (...)
-    {
-        return nullptr;
-    }
 }
 
-void DestroyDecoderContext(DecoderContext* context)
-{
-    if (context)
-    {
-        delete context;
-        context = nullptr;
-    }
-}
-
-DecoderStatus DecoderParseFile(
-    DecoderContext* context,
+DecoderStatus DecoderReadImage(
+    DecoderCallbacks* callbacks,
     const uint8_t* data,
     size_t dataSize,
-    DecoderImageInfo* imageInfo,
     ErrorInfo* errorInfo)
 {
-    if (!context || !data || !imageInfo)
+    if (!callbacks || !data)
     {
         return DecoderStatus::NullParameter;
     }
@@ -75,8 +84,10 @@ DecoderStatus DecoderParseFile(
     {
         auto runner = JxlResizableParallelRunnerMake(nullptr);
 
+        auto dec = JxlDecoderMake(nullptr);
+
         if (JxlDecoderSubscribeEvents(
-            context->dec.get(),
+            dec.get(),
             JXL_DEC_BASIC_INFO |
             JXL_DEC_COLOR_ENCODING |
             JXL_DEC_FULL_IMAGE) != JXL_DEC_SUCCESS)
@@ -86,7 +97,7 @@ DecoderStatus DecoderParseFile(
         }
 
         if (JxlDecoderSetParallelRunner(
-            context->dec.get(),
+            dec.get(),
             JxlResizableParallelRunner,
             runner.get()) != JXL_DEC_SUCCESS)
         {
@@ -94,16 +105,18 @@ DecoderStatus DecoderParseFile(
             return DecoderStatus::DecodeError;
         }
 
-        JxlDecoderSetInput(context->dec.get(), data, dataSize);
+        JxlDecoderSetInput(dec.get(), data, dataSize);
 
         bool firstFrameDecoded = false;
-        imageInfo->iccProfileSize = 0;
+        JxlBasicInfo basicInfo{};
+        JxlPixelFormat format{ 4, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0 };
+        ImageOutState imageOutState{};
 
         // TODO: Implement EXIF and XMP reading when libjxl v0.7.0 is released.
 
         while (true)
         {
-            JxlDecoderStatus status = JxlDecoderProcessInput(context->dec.get());
+            JxlDecoderStatus status = JxlDecoderProcessInput(dec.get());
 
             if (status == JXL_DEC_ERROR)
             {
@@ -112,13 +125,11 @@ DecoderStatus DecoderParseFile(
             }
             else if (status == JXL_DEC_BASIC_INFO)
             {
-                if (JxlDecoderGetBasicInfo(context->dec.get(), &context->basicInfo) != JXL_DEC_SUCCESS)
+                if (JxlDecoderGetBasicInfo(dec.get(), &basicInfo) != JXL_DEC_SUCCESS)
                 {
                     SetErrorMessage(errorInfo, "JxlDecoderGetBasicInfo failed.");
                     return DecoderStatus::DecodeError;
                 }
-
-                const JxlBasicInfo& basicInfo = context->basicInfo;
 
                 if (basicInfo.have_animation)
                 {
@@ -145,19 +156,40 @@ DecoderStatus DecoderParseFile(
                     return DecoderStatus::UnsupportedChannelFormat;
                 }
 
-                context->format.num_channels = colorChannelCount + (hasAlphaChannel ? 1 : 0);
-                imageInfo->width = static_cast<int32_t>(width);
-                imageInfo->height = static_cast<int32_t>(height);
+                format.num_channels = colorChannelCount + (hasAlphaChannel ? 1 : 0);
+                imageOutState.numberOfChannels = format.num_channels;
             }
             else if (status == JXL_DEC_COLOR_ENCODING)
             {
+                size_t iccProfileSize = 0;
+
                 if (JxlDecoderGetICCProfileSize(
-                    context->dec.get(),
-                    &context->format,
+                    dec.get(),
+                    &format,
                     JXL_COLOR_PROFILE_TARGET_DATA,
-                    &imageInfo->iccProfileSize) != JXL_DEC_SUCCESS)
+                    &iccProfileSize) == JXL_DEC_SUCCESS)
                 {
-                    imageInfo->iccProfileSize = 0;
+                    if (iccProfileSize > 0)
+                    {
+                        uint8_t* buffer = callbacks->createMetadataBuffer(MetadataType::IccProfile, iccProfileSize);
+
+                        if (buffer)
+                        {
+                            if (JxlDecoderGetColorAsICCProfile(
+                                dec.get(),
+                                &format,
+                                JXL_COLOR_PROFILE_TARGET_DATA,
+                                buffer,
+                                iccProfileSize) != JXL_DEC_SUCCESS)
+                            {
+                                return DecoderStatus::MetadataError;
+                            }
+                        }
+                        else
+                        {
+                            return DecoderStatus::CreateMetadataBufferError;
+                        }
+                    }
                 }
             }
             else if (status == JXL_DEC_NEED_IMAGE_OUT_BUFFER)
@@ -167,37 +199,49 @@ DecoderStatus DecoderParseFile(
                     return DecoderStatus::HasMultipleFrames;
                 }
 
-                size_t requiredBufferSize = 0;
+                JxlFrameHeader frameHeader{};
 
-                if (JxlDecoderImageOutBufferSize(
-                    context->dec.get(),
-                    &context->format,
-                    &requiredBufferSize) != JXL_DEC_SUCCESS)
+                if (JxlDecoderGetFrameHeader(dec.get(), &frameHeader) != JXL_DEC_SUCCESS)
                 {
-                    SetErrorMessage(errorInfo, "JxlDecoderImageOutBufferSize failed.");
+                    SetErrorMessage(errorInfo, "JxlDecoderGetFrameHeader failed.");
                     return DecoderStatus::DecodeError;
                 }
 
-                size_t expectedBufferSize = static_cast<size_t>(imageInfo->width) * static_cast<size_t>(imageInfo->height) * static_cast<size_t>(context->format.num_channels);
+                std::vector<char> layerNameBuffer;
+                char* layerNamePtr = nullptr;
+                uint32_t layerNameLengthInBytes = 0;
 
-                if (requiredBufferSize != expectedBufferSize)
+                if (frameHeader.name_length > 0)
                 {
-                    SetErrorMessageFormat(errorInfo,
-                        "JxlDecoderImageOutBufferSize value (%Iu) does not match the expected buffer size (%Iu).",
-                        requiredBufferSize,
-                        expectedBufferSize);
-                    return DecoderStatus::DecodeError;
+                    layerNameBuffer.resize(static_cast<size_t>(frameHeader.name_length) + 1);
+
+                    if (JxlDecoderGetFrameName(
+                        dec.get(),
+                        layerNameBuffer.data(),
+                        layerNameBuffer.size()) == JXL_DEC_SUCCESS)
+                    {
+                        layerNamePtr = layerNameBuffer.data();
+                        layerNameLengthInBytes = frameHeader.name_length;
+                    }
                 }
 
-                context->pixelData.resize(expectedBufferSize);
-
-                if (JxlDecoderSetImageOutBuffer(
-                    context->dec.get(),
-                    &context->format,
-                    context->pixelData.data(),
-                    context->pixelData.size()) != JXL_DEC_SUCCESS)
+                if (!callbacks->createLayer(
+                    static_cast<int32_t>(basicInfo.xsize),
+                    static_cast<int32_t>(basicInfo.ysize),
+                    layerNamePtr,
+                    layerNameLengthInBytes,
+                    &imageOutState.outLayerData))
                 {
-                    SetErrorMessage(errorInfo, "JxlDecoderSetImageOutBuffer failed.");
+                    return DecoderStatus::CreateLayerError;
+                }
+
+                if (JxlDecoderSetImageOutCallback(
+                    dec.get(),
+                    &format,
+                    &ImageOutCallback,
+                    &imageOutState) != JXL_DEC_SUCCESS)
+                {
+                    SetErrorMessage(errorInfo, "JxlDecoderSetImageOutCallback failed.");
                     return DecoderStatus::DecodeError;
                 }
             }
@@ -230,69 +274,4 @@ DecoderStatus DecoderParseFile(
     return DecoderStatus::Ok;
 }
 
-DecoderStatus DecoderGetIccProfileData(
-    DecoderContext* context,
-    uint8_t* buffer,
-    size_t bufferSize)
-{
-    if (!buffer)
-    {
-        return DecoderStatus::NullParameter;
-    }
-
-    return JxlDecoderGetColorAsICCProfile(
-        context->dec.get(),
-        &context->format,
-        JXL_COLOR_PROFILE_TARGET_DATA,
-        buffer,
-        bufferSize) == JXL_DEC_SUCCESS ? DecoderStatus::Ok : DecoderStatus::MetadataError;
-}
-
-void DecoderCopyPixelsToSurface(DecoderContext* context, BitmapData* bitmap)
-{
-    const size_t width = static_cast<size_t>(bitmap->width);
-    const size_t height = static_cast<size_t>(bitmap->height);
-    const size_t destStride = static_cast<size_t>(bitmap->stride);
-    uint8_t* destScan0 = bitmap->scan0;
-
-    const uint8_t* srcScan0 = context->pixelData.data();
-    const uint32_t srcChannelCount = context->format.num_channels;
-    const size_t srcStride = width * static_cast<size_t>(srcChannelCount);
-
-    for (size_t y = 0; y < height; y++)
-    {
-        const uint8_t* src = srcScan0 + (y * srcStride);
-        ColorBgra* dest = reinterpret_cast<ColorBgra*>(destScan0 + (y * destStride));
-
-        for (size_t x = 0; x < width; x++)
-        {
-            switch (srcChannelCount)
-            {
-            case 1: // Gray
-                dest->r = dest->g = dest->b = src[0];
-                dest->a = 255;
-                break;
-            case 2: // Gray + Alpha
-                dest->r = dest->g = dest->b = src[0];
-                dest->a = src[1];
-                break;
-            case 3: // RGB
-                dest->r = src[0];
-                dest->g = src[1];
-                dest->b = src[2];
-                dest->a = 255;
-                break;
-            case 4: // RGBA
-                dest->r = src[0];
-                dest->g = src[1];
-                dest->b = src[2];
-                dest->a = src[3];
-                break;
-            }
-
-            src += srcChannelCount;
-            dest++;
-        }
-    }
-}
 

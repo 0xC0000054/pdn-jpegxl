@@ -20,43 +20,19 @@ namespace JpegXLFileTypePlugin.Interop
 {
     internal static class JpegXLNative
     {
-        internal static SafeDecoderContext CreateDecoder()
-        {
-            SafeDecoderContext context;
-
-            if (RuntimeInformation.ProcessArchitecture == Architecture.X64)
-            {
-                context = JpegXL_X64.CreateDecoder();
-            }
-            else if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
-            {
-                context = JpegXL_Arm64.CreateDecoder();
-            }
-            else if (RuntimeInformation.ProcessArchitecture == Architecture.X86)
-            {
-                context = JpegXL_X86.CreateDecoder();
-            }
-            else
-            {
-                throw new PlatformNotSupportedException();
-            }
-
-            if (context is null || context.IsInvalid)
-            {
-                ExceptionUtil.ThrowInvalidOperationException("Unable to create the HEIC file context.");
-            }
-
-            return context;
-        }
-
-        internal static unsafe void DecodeFile(SafeDecoderContext context, byte[] imageData, out DecoderImageInfo imageInfo)
+        internal static unsafe void LoadImage(byte[] imageData,
+                                              DecoderLayerData layerData,
+                                              DecoderImageMetadata imageMetadata)
         {
             ArgumentNullException.ThrowIfNull(imageData);
-
-            imageInfo = new DecoderImageInfo();
+            ArgumentNullException.ThrowIfNull(layerData);
+            ArgumentNullException.ThrowIfNull(imageMetadata);
 
             DecoderStatus status;
             ErrorInfo errorInfo = new();
+
+            DecoderCallbacks callbacks = new(layerData.CreateLayer,
+                                             imageMetadata.CreateMetadataBufferCallback);
 
             fixed (byte* data = imageData)
             {
@@ -64,15 +40,15 @@ namespace JpegXLFileTypePlugin.Interop
 
                 if (RuntimeInformation.ProcessArchitecture == Architecture.X64)
                 {
-                    status = JpegXL_X64.DecodeFile(context, data, dataSize, imageInfo, ref errorInfo);
+                    status = JpegXL_X64.LoadImage(callbacks, data, dataSize, ref errorInfo);
                 }
                 else if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
                 {
-                    status = JpegXL_Arm64.DecodeFile(context, data, dataSize, imageInfo, ref errorInfo);
+                    status = JpegXL_Arm64.LoadImage(callbacks, data, dataSize, ref errorInfo);
                 }
                 else if (RuntimeInformation.ProcessArchitecture == Architecture.X86)
                 {
-                    status = JpegXL_X86.DecodeFile(context, data, dataSize, imageInfo, ref errorInfo);
+                    status = JpegXL_X86.LoadImage(callbacks, data, dataSize, ref errorInfo);
                 }
                 else
                 {
@@ -80,66 +56,11 @@ namespace JpegXLFileTypePlugin.Interop
                 }
             }
 
-            if (status != DecoderStatus.Ok)
-            {
-                HandleDecoderError(status, errorInfo);
-            }
-        }
-
-        internal static unsafe void GetIccProfileData(SafeDecoderContext context, byte* data, nuint dataSize)
-        {
-            DecoderStatus status;
-
-            if (RuntimeInformation.ProcessArchitecture == Architecture.X64)
-            {
-                status = JpegXL_X64.GetIccProfileData(context, data, dataSize);
-            }
-            else if(RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
-            {
-                status = JpegXL_Arm64.GetIccProfileData(context, data, dataSize);
-            }
-            else if (RuntimeInformation.ProcessArchitecture == Architecture.X86)
-            {
-                status = JpegXL_X86.GetIccProfileData(context, data, dataSize);
-            }
-            else
-            {
-                throw new PlatformNotSupportedException();
-            }
+            GC.KeepAlive(callbacks);
 
             if (status != DecoderStatus.Ok)
             {
-                HandleDecoderError(status);
-            }
-        }
-
-        internal static unsafe void CopyDecodedPixelsToSurface(SafeDecoderContext context, Surface surface)
-        {
-            ArgumentNullException.ThrowIfNull(surface);
-
-            BitmapData bitmapData = new()
-            {
-                scan0 = (byte*)surface.Scan0.VoidStar,
-                width = (uint)surface.Width,
-                height = (uint)surface.Height,
-                stride = (uint)surface.Stride
-            };
-
-            if (RuntimeInformation.ProcessArchitecture == Architecture.X64)
-            {
-                JpegXL_X64.CopyDecodedPixelsToSurface(context, ref bitmapData);
-            }
-            else if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
-            {
-                JpegXL_Arm64.CopyDecodedPixelsToSurface(context, ref bitmapData);
-            }
-            else if (RuntimeInformation.ProcessArchitecture == Architecture.X86)
-            {
-                JpegXL_X86.CopyDecodedPixelsToSurface(context, ref bitmapData);
-            }
-            else
-            {
-                throw new PlatformNotSupportedException();
+                HandleDecoderError(status, layerData, imageMetadata, errorInfo);
             }
         }
 
@@ -192,7 +113,10 @@ namespace JpegXLFileTypePlugin.Interop
             }
         }
 
-        private static unsafe void HandleDecoderError(DecoderStatus status, ErrorInfo errorInfo = default)
+        private static unsafe void HandleDecoderError(DecoderStatus status,
+                                                      DecoderLayerData layerData,
+                                                      DecoderImageMetadata imageMetadata,
+                                                      ErrorInfo errorInfo)
         {
             if (status == DecoderStatus.DecodeError)
             {
@@ -207,6 +131,32 @@ namespace JpegXLFileTypePlugin.Interop
                     throw new FormatException(message);
                 }
             }
+            else if (status == DecoderStatus.CreateLayerError)
+            {
+                ExceptionDispatchInfo? info = layerData.ExceptionInfo;
+
+                if (info != null)
+                {
+                    info.Throw();
+                }
+                else
+                {
+                    throw new FormatException("An unspecified error occurred when creating the image layer.");
+                }
+            }
+            else if (status == DecoderStatus.CreateMetadataBufferError)
+            {
+                ExceptionDispatchInfo? info = imageMetadata.ExceptionInfo;
+
+                if (info != null)
+                {
+                    info.Throw();
+                }
+                else
+                {
+                    throw new FormatException("An unspecified error occurred when creating the image metadata buffer.");
+                }
+            }
             else
             {
                 switch (status)
@@ -217,8 +167,6 @@ namespace JpegXLFileTypePlugin.Interop
                         throw new InvalidOperationException("A required native API parameter was null.");
                     case DecoderStatus.InvalidParameter:
                         throw new InvalidOperationException("A native API parameter was invalid.");
-                    case DecoderStatus.BufferTooSmall:
-                        throw new InvalidOperationException("A native API buffer parameter was too small.");
                     case DecoderStatus.OutOfMemory:
                         throw new OutOfMemoryException();
                     case DecoderStatus.HasAnimation:

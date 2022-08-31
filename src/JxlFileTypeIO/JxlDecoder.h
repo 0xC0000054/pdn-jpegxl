@@ -15,22 +15,8 @@
 #include "Common.h"
 #include "JxlDecoderTypes.h"
 
-DecoderContext* CreateDecoderContext();
-
-void DestroyDecoderContext(DecoderContext* context);
-
-DecoderStatus DecoderParseFile(
-    DecoderContext* context,
+DecoderStatus DecoderReadImage(
+    DecoderCallbacks* callbacks,
     const uint8_t* data,
     size_t dataSize,
-    DecoderImageInfo* imageInfo,
     ErrorInfo* errorInfo);
-
-DecoderStatus DecoderGetIccProfileData(
-    DecoderContext* context,
-    uint8_t* buffer,
-    size_t bufferSize);
-
-void DecoderCopyPixelsToSurface(
-    DecoderContext* context,
-    BitmapData* bitmap);

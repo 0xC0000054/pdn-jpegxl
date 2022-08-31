@@ -26,25 +26,11 @@
 extern "C" {
 #endif
 
-JXLFILETYPEIO_API DecoderContext* __stdcall CreateDecoder();
-
-JXLFILETYPEIO_API void __stdcall DestroyDecoder(DecoderContext* context);
-
-JXLFILETYPEIO_API DecoderStatus __stdcall DecodeFile(
-    DecoderContext* context,
+JXLFILETYPEIO_API DecoderStatus __stdcall LoadImage(
+    DecoderCallbacks* callbacks,
     const uint8_t* data,
     size_t dataSize,
-    DecoderImageInfo* imageInfo,
     ErrorInfo* errorInfo);
-
-JXLFILETYPEIO_API DecoderStatus __stdcall GetIccProfileData(
-    DecoderContext* context,
-    uint8_t* buffer,
-    size_t bufferSize);
-
-JXLFILETYPEIO_API void __stdcall CopyDecodedPixelsToSurface(
-    DecoderContext* context,
-    BitmapData* bitmap);
 
 JXLFILETYPEIO_API EncoderStatus __stdcall SaveImage(
     const BitmapData* bitmap,

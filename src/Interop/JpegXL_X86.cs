@@ -10,7 +10,6 @@
 //
 ////////////////////////////////////////////////////////////////////////
 
-using System;
 using System.Runtime.InteropServices;
 
 namespace JpegXLFileTypePlugin.Interop
@@ -20,25 +19,10 @@ namespace JpegXLFileTypePlugin.Interop
         private const string DllName = "JpegXLFileTypeIO_X86.dll";
 
         [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
-        internal static extern SafeDecoderContextX86 CreateDecoder();
-
-        [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
-        internal static extern void DestroyDecoder(IntPtr handle);
-
-        [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
-        internal static extern unsafe DecoderStatus DecodeFile(SafeDecoderContext context,
+        internal static extern unsafe DecoderStatus LoadImage(DecoderCallbacks callbacks,
                                                               byte* data,
                                                               nuint dataSize,
-                                                              [In, Out] DecoderImageInfo info,
                                                               ref ErrorInfo errorInfo);
-
-        [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
-        internal static extern unsafe DecoderStatus GetIccProfileData(SafeDecoderContext context,
-                                                                     byte* data,
-                                                                     nuint dataSize);
-
-        [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
-        internal static extern void CopyDecodedPixelsToSurface(SafeDecoderContext context, [In] ref BitmapData bitmap);
 
         [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
         internal static extern EncoderStatus SaveImage([In] ref BitmapData bitmap,

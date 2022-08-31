@@ -14,26 +14,36 @@
 
 #include <stdint.h>
 
-struct DecoderContext;
-
 enum class DecoderStatus : int32_t
 {
     Ok,
     NullParameter,
     InvalidParameter,
-    BufferTooSmall,
     OutOfMemory,
     HasAnimation,
     HasMultipleFrames,
     ImageDimensionExceedsInt32,
     UnsupportedChannelFormat,
+    CreateLayerError,
+    CreateMetadataBufferError,
     DecodeError,
     MetadataError
 };
 
-struct DecoderImageInfo
+// Creates a layer and populates the outLayerData parameter with the layer information.
+// Returns true if successful, or false if an error occurred when creating the layer.
+typedef bool(__stdcall* DecoderCreateLayerCallback)(
+    int32_t width,
+    int32_t height,
+    char* name,
+    uint32_t nameLength,
+    BitmapData* outLayerData);
+// Creates a buffer to store the specified meta data, and returns a pointer to it.
+// Returns a pointer to the allocated data buffer, or NULL if an error occurred.
+typedef uint8_t*(__stdcall* DecoderCreateMetadataBufferCallback)(MetadataType type, size_t bufferSize);
+
+struct DecoderCallbacks
 {
-    int32_t width;
-    int32_t height;
-    size_t iccProfileSize;
+    DecoderCreateLayerCallback createLayer;
+    DecoderCreateMetadataBufferCallback createMetadataBuffer;
 };

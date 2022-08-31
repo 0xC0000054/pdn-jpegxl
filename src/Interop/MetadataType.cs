@@ -12,19 +12,10 @@
 
 namespace JpegXLFileTypePlugin.Interop
 {
-    internal enum DecoderStatus : int
+    internal enum MetadataType : int
     {
-        Ok,
-        NullParameter,
-        InvalidParameter,
-        OutOfMemory,
-        HasAnimation,
-        HasMultipleFrames,
-        ImageDimensionExceedsInt32,
-        UnsupportedChannelFormat,
-        CreateLayerError,
-        CreateMetadataBufferError,
-        DecodeError,
-        MetadataError
+        Exif,
+        IccProfile,
+        Xmp
     }
 }

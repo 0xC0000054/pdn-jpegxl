@@ -14,7 +14,6 @@ using JpegXLFileTypePlugin.Interop;
 using PaintDotNet;
 using PaintDotNet.Imaging;
 using PaintDotNet.IO;
-using System;
 using System.IO;
 
 namespace JpegXLFileTypePlugin
@@ -28,37 +27,35 @@ namespace JpegXLFileTypePlugin
             byte[] data = new byte[input.Length];
             input.ProperRead(data, 0, data.Length);
 
-            using (SafeDecoderContext context = JpegXLNative.CreateDecoder())
+            using (DecoderLayerData layerData = new())
+            using (DecoderImageMetadata imageMetadata = new())
             {
-                JpegXLNative.DecodeFile(context, data, out DecoderImageInfo imageInfo);
+                JpegXLNative.LoadImage(data, layerData, imageMetadata);
 
-                doc = new Document(imageInfo.width, imageInfo.height);
+                BitmapLayer? layer = layerData.Layer;
 
-                AddMetadataToDocument(context, imageInfo, doc);
+                if (layer is null)
+                {
+                    ExceptionUtil.ThrowInvalidOperationException("The layer is null.");
+                }
 
-                BitmapLayer layer = Layer.CreateBackgroundLayer(imageInfo.width, imageInfo.height);
+                doc = new Document(layer.Width, layer.Height);
 
-                JpegXLNative.CopyDecodedPixelsToSurface(context, layer.Surface);
+                AddMetadataToDocument(imageMetadata, doc);
 
                 doc.Layers.Add(layer);
+                layerData.OwnsLayer = false;
             }
 
             return doc;
         }
 
-        private static unsafe void AddMetadataToDocument(SafeDecoderContext context,
-                                                         DecoderImageInfo imageInfo,
-                                                         Document document)
+        private static unsafe void AddMetadataToDocument(DecoderImageMetadata imageMetadata, Document document)
         {
-            if (imageInfo.iccProfileSize > 0 && imageInfo.iccProfileSize <= int.MaxValue)
+            byte[]? iccProfileBytes = imageMetadata.TryGetIccProfileBytes();
+
+            if (iccProfileBytes != null)
             {
-                byte[] iccProfileBytes = GC.AllocateUninitializedArray<byte>((int)imageInfo.iccProfileSize);
-
-                fixed (byte* data = iccProfileBytes)
-                {
-                    JpegXLNative.GetIccProfileData(context, data, imageInfo.iccProfileSize);
-                }
-
                 ExifPropertyKey interColorProfile = ExifPropertyKeys.Image.InterColorProfile;
 
                 document.Metadata.AddExifPropertyItem(interColorProfile.Path.Section,

@@ -30,6 +30,13 @@ struct ColorBgra
     uint8_t a;
 };
 
+enum class MetadataType : int32_t
+{
+    Exif,
+    IccProfile,
+    Xmp
+};
+
 struct ErrorInfo
 {
     static const size_t maxErrorMessageLength = 255;

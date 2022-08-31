@@ -14,34 +14,13 @@
 #include "JxlDecoder.h"
 #include "JxlEncoder.h"
 
-DecoderContext* __stdcall CreateDecoder()
-{
-    return CreateDecoderContext();
-}
-
-void __stdcall DestroyDecoder(DecoderContext* context)
-{
-    DestroyDecoderContext(context);
-}
-
-DecoderStatus __stdcall DecodeFile(
-    DecoderContext* context,
+DecoderStatus __stdcall LoadImage(
+    DecoderCallbacks* callbacks,
     const uint8_t* data,
     size_t dataSize,
-    DecoderImageInfo* imageInfo,
     ErrorInfo* errorInfo)
 {
-    return DecoderParseFile(context, data, dataSize, imageInfo, errorInfo);
-}
-
-DecoderStatus __stdcall GetIccProfileData(DecoderContext* context, uint8_t* buffer, size_t bufferSize)
-{
-    return DecoderGetIccProfileData(context, buffer, bufferSize);
-}
-
-void __stdcall CopyDecodedPixelsToSurface(DecoderContext* context, BitmapData* bitmap)
-{
-    DecoderCopyPixelsToSurface(context, bitmap);
+    return DecoderReadImage(callbacks, data, dataSize, errorInfo);
 }
 
 EncoderStatus __stdcall SaveImage(

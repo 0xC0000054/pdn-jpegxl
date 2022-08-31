@@ -10,19 +10,11 @@
 //
 ////////////////////////////////////////////////////////////////////////
 
+using System;
 using System.Runtime.InteropServices;
 
 namespace JpegXLFileTypePlugin.Interop
 {
-#pragma warning disable 0649
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal sealed class DecoderImageInfo
-    {
-        public readonly int width;
-        public readonly int height;
-        public readonly nuint iccProfileSize;
-    }
-
-#pragma warning restore 0649
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    internal unsafe delegate IntPtr DecoderCreateMetadataBufferCallback(MetadataType type, nuint size);
 }
