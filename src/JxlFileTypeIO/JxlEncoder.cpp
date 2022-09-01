@@ -279,6 +279,7 @@ EncoderStatus EncoderWriteImage(
             bool isGray = outputPixelFormat == OutputPixelFormat::Gray || outputPixelFormat == OutputPixelFormat::GrayAlpha;
 
             JxlColorEncodingSetToSRGB(&colorEncoding, isGray);
+            colorEncoding.rendering_intent = JXL_RENDERING_INTENT_PERCEPTUAL;
 
             if (JxlEncoderSetColorEncoding(enc.get(), &colorEncoding) != JXL_ENC_SUCCESS)
             {
