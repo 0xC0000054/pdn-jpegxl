@@ -46,7 +46,7 @@ namespace JpegXLFileTypePlugin
             {
                 new Int32Property(PropertyNames.Quality, 90, 0, 100),
                 new BooleanProperty(PropertyNames.Lossless, false),
-                new Int32Property(PropertyNames.EncoderSpeed, 3, 1, 9),
+                new Int32Property(PropertyNames.EncoderSpeed, 7, 1, 9),
             };
 
             List<PropertyCollectionRule> rules = new()
@@ -71,7 +71,7 @@ namespace JpegXLFileTypePlugin
 
             PropertyControlInfo encoderSpeedPCI = info.FindControlForPropertyName(PropertyNames.EncoderSpeed);
             encoderSpeedPCI.ControlProperties[ControlInfoPropertyNames.DisplayName].Value = Resources.EncoderSpeed_DisplayName;
-            encoderSpeedPCI.ControlProperties[ControlInfoPropertyNames.Description].Value = string.Empty;
+            encoderSpeedPCI.ControlProperties[ControlInfoPropertyNames.Description].Value = Resources.EncoderSpeed_Description;
 
             return info;
         }

@@ -117,6 +117,9 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="EncoderSpeed_Description" xml:space="preserve">
+    <value>Lower values are faster, but may reduce image quality.</value>
+  </data>
   <data name="EncoderSpeed_DisplayName" xml:space="preserve">
     <value>Encoder Speed</value>
   </data>

@@ -27,9 +27,7 @@ namespace JpegXLFileTypePlugin.Interop
             // Lossless encoding implies a distance value of 0.0, anything higher than that
             // will use lossy encoding.
             distance = lossless ? 0.0f : QualityToDistanceLookupTable.GetValue(quality);
-            // We use an encoder speed range where 9 is the fastest and 1 is the slowest.
-            // libjxl uses an encoder speed range where 1 is the fastest and 9 is the slowest.
-            speed = 10 - encoderSpeed;
+            speed = encoderSpeed;
             this.lossless = lossless;
         }
     }
