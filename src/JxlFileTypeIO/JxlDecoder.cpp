@@ -133,6 +133,12 @@ DecoderStatus DecoderReadImage(
             decompressBox = false;
         }
 
+        if (JxlDecoderSetUnpremultiplyAlpha(dec.get(), JXL_TRUE) != JXL_DEC_SUCCESS)
+        {
+            SetErrorMessage(errorInfo, "JxlDecoderSetUnpremultiplyAlpha failed.");
+            return DecoderStatus::DecodeError;
+        }
+
         JxlDecoderSetInput(dec.get(), data, dataSize);
         JxlDecoderCloseInput(dec.get());
 
