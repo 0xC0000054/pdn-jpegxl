@@ -21,8 +21,12 @@ namespace JpegXLFileTypePlugin.Interop
         [StructLayout(LayoutKind.Sequential)]
         private unsafe struct NativeEncoderImageMetadata
         {
+            public void* exif;
+            public nuint exifSize;
             public void* iccProfile;
             public nuint iccProfileSize;
+            public void* xmp;
+            public nuint xmpSize;
         }
 
         private static readonly int NativeMetadataSize = Marshal.SizeOf<NativeEncoderImageMetadata>();
@@ -78,6 +82,18 @@ namespace JpegXLFileTypePlugin.Interop
 
             NativeEncoderImageMetadata* nativeMetadata = (NativeEncoderImageMetadata*)nativeStructure;
 
+            if (metadata.exif != null && metadata.exif.Length > 0)
+            {
+                nativeMetadata->exif = NativeMemory.Alloc((nuint)metadata.exif.Length);
+                Marshal.Copy(metadata.exif, 0, new IntPtr(nativeMetadata->exif), metadata.exif.Length);
+                nativeMetadata->exifSize = (nuint)metadata.exif.Length;
+            }
+            else
+            {
+                nativeMetadata->exif = null;
+                nativeMetadata->exifSize = 0;
+            }
+
             if (metadata.iccProfile != null && metadata.iccProfile.Length > 0)
             {
                 nativeMetadata->iccProfile = NativeMemory.Alloc((nuint)metadata.iccProfile.Length);
@@ -88,6 +104,18 @@ namespace JpegXLFileTypePlugin.Interop
             {
                 nativeMetadata->iccProfile = null;
                 nativeMetadata->iccProfileSize = 0;
+            }
+
+            if (metadata.xmp != null && metadata.xmp.Length > 0)
+            {
+                nativeMetadata->xmp = NativeMemory.Alloc((nuint)metadata.xmp.Length);
+                Marshal.Copy(metadata.xmp, 0, new IntPtr(nativeMetadata->xmp), metadata.xmp.Length);
+                nativeMetadata->xmpSize = (nuint)metadata.xmp.Length;
+            }
+            else
+            {
+                nativeMetadata->xmp = null;
+                nativeMetadata->xmpSize = 0;
             }
 
             return new IntPtr(nativeStructure);

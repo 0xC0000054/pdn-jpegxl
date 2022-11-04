@@ -10,14 +10,18 @@
 //
 ////////////////////////////////////////////////////////////////////////
 
+using JpegXLFileTypePlugin.Exif;
 using JpegXLFileTypePlugin.Interop;
 using PaintDotNet;
 using PaintDotNet.Collections;
 using PaintDotNet.Imaging;
 using PaintDotNet.Rendering;
 using System;
+using System.Collections.Generic;
 using System.IO;
-using System.Linq;
+using System.Text;
+
+using ExifColorSpace = JpegXLFileTypePlugin.Exif.ExifColorSpace;
 
 namespace JpegXLFileTypePlugin
 {
@@ -60,26 +64,89 @@ namespace JpegXLFileTypePlugin
 
         private static EncoderImageMetadata? CreateImageMetadata(Document input)
         {
+            byte[]? exifBytes = null;
             byte[]? iccProfileBytes = null;
+            byte[]? xmpBytes = null;
 
-            ExifPropertyItem[] exifPropertyItems = input.Metadata.GetExifPropertyItems();
+            Dictionary<ExifPropertyPath, ExifValue>? propertyItems = GetExifMetadataFromDocument(input);
 
-            if (exifPropertyItems != null)
+            if (propertyItems != null)
             {
-                ExifPropertyItem? iccProfileItem = exifPropertyItems.Where(p => p.Path == ExifPropertyKeys.Image.InterColorProfile.Path).FirstOrDefault();
+                ExifColorSpace exifColorSpace = ExifColorSpace.Srgb;
 
-                if (iccProfileItem != null)
+                if (propertyItems.TryGetValue(ExifPropertyKeys.Photo.ColorSpace.Path, out ExifValue? value))
                 {
-                    iccProfileBytes = iccProfileItem.Value.Data.ToArrayEx();
+                    propertyItems.Remove(ExifPropertyKeys.Photo.ColorSpace.Path);
+
+                    if (MetadataHelpers.TryDecodeShort(value, out ushort colorSpace))
+                    {
+                        exifColorSpace = (ExifColorSpace)colorSpace;
+                    }
+                }
+
+                if (iccProfileBytes != null)
+                {
+                    exifColorSpace = ExifColorSpace.Uncalibrated;
+                }
+                else
+                {
+                    ExifPropertyPath iccProfileKey = ExifPropertyKeys.Image.InterColorProfile.Path;
+
+                    if (propertyItems.TryGetValue(iccProfileKey, out ExifValue? iccProfileItem))
+                    {
+                        iccProfileBytes = iccProfileItem.Data.ToArrayEx();
+                        propertyItems.Remove(iccProfileKey);
+                        exifColorSpace = ExifColorSpace.Uncalibrated;
+                    }
+                }
+
+                if (iccProfileBytes != null)
+                {
+                    // Remove the InteroperabilityIndex and related tags, these tags should
+                    // not be written if the image has an ICC color profile.
+                    propertyItems.Remove(ExifPropertyKeys.Interop.InteroperabilityIndex.Path);
+                    propertyItems.Remove(ExifPropertyKeys.Interop.InteroperabilityVersion.Path);
+                }
+
+                exifBytes = new ExifWriter(input, propertyItems, exifColorSpace).CreateExifBlob();
+            }
+
+            XmpPacket? xmpPacket = input.Metadata.TryGetXmpPacket();
+
+            if (xmpPacket != null)
+            {
+                string xmpPacketAsString = xmpPacket.ToString(XmpPacketWrapperType.ReadOnly);
+
+                xmpBytes = Encoding.UTF8.GetBytes(xmpPacketAsString);
+            }
+
+            EncoderImageMetadata? metadata = null;
+
+            if (exifBytes != null || iccProfileBytes != null || xmpBytes != null)
+            {
+                metadata = new EncoderImageMetadata(exifBytes, iccProfileBytes, xmpBytes);
+            }
+
+            return metadata;
+        }
+
+        private static Dictionary<ExifPropertyPath, ExifValue>? GetExifMetadataFromDocument(Document doc)
+        {
+            Dictionary<ExifPropertyPath, ExifValue>? items = null;
+
+            ExifPropertyItem[] exifProperties = doc.Metadata.GetExifPropertyItems();
+
+            if (exifProperties.Length > 0)
+            {
+                items = new Dictionary<ExifPropertyPath, ExifValue>(exifProperties.Length);
+
+                foreach (ExifPropertyItem property in exifProperties)
+                {
+                    items.TryAdd(property.Path, property.Value);
                 }
             }
 
-            if (iccProfileBytes != null)
-            {
-                return new EncoderImageMetadata(iccProfileBytes);
-            }
-
-            return null;
+            return items;
         }
     }
 }

@@ -10,10 +10,12 @@
 //
 ////////////////////////////////////////////////////////////////////////
 
+using JpegXLFileTypePlugin.Exif;
 using JpegXLFileTypePlugin.Interop;
 using PaintDotNet;
 using PaintDotNet.Imaging;
 using PaintDotNet.IO;
+using System.Collections.Generic;
 using System.IO;
 
 namespace JpegXLFileTypePlugin
@@ -62,6 +64,37 @@ namespace JpegXLFileTypePlugin
                                                       interColorProfile.Path.TagID,
                                                       new ExifValue(ExifValueType.Undefined,
                                                                     iccProfileBytes));
+            }
+
+            byte[]? exifBytes = imageMetadata.TryGetExifBytes();
+
+            if (exifBytes != null)
+            {
+                ExifValueCollection? exifValues = ExifParser.Parse(exifBytes);
+
+                if (exifValues != null)
+                {
+                    exifValues.Remove(ExifPropertyKeys.Image.InterColorProfile.Path);
+
+                    foreach (KeyValuePair<ExifPropertyPath, ExifValue> item in exifValues)
+                    {
+                        ExifPropertyPath path = item.Key;
+
+                        document.Metadata.AddExifPropertyItem(path.Section, path.TagID, item.Value);
+                    }
+                }
+            }
+
+            byte[]? xmpBytes = imageMetadata.TryGetXmpBytes();
+
+            if (xmpBytes != null)
+            {
+                XmpPacket? xmpPacket = XmpPacket.TryParse(xmpBytes);
+
+                if (xmpPacket != null)
+                {
+                    document.Metadata.SetXmpPacket(xmpPacket);
+                }
             }
         }
     }

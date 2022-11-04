@@ -37,6 +37,10 @@ struct EncoderOptions
 
 struct EncoderImageMetadata
 {
+    uint8_t* exif;
+    size_t exifSize;
     uint8_t* iccProfile;
     size_t iccProfileSize;
+    uint8_t* xmp;
+    size_t xmpSize;
 };

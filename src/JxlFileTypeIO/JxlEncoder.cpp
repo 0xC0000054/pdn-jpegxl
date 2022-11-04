@@ -203,6 +203,12 @@ EncoderStatus EncoderWriteImage(
             return EncoderStatus::UserCancelled;
         }
 
+        if (JxlEncoderUseBoxes(enc.get()) != JXL_ENC_SUCCESS)
+        {
+            SetErrorMessage(errorInfo, "JxlEncoderUseBoxes failed.");
+            return EncoderStatus::EncodeError;
+        }
+
         JxlBasicInfo basicInfo;
         JxlEncoderInitBasicInfo(&basicInfo);
 
@@ -262,29 +268,63 @@ EncoderStatus EncoderWriteImage(
             return EncoderStatus::UserCancelled;
         }
 
-        if (metadata && metadata->iccProfileSize > 0)
+        if (metadata)
         {
-            if (JxlEncoderSetICCProfile(
-                enc.get(),
-                metadata->iccProfile,
-                metadata->iccProfileSize) != JXL_ENC_SUCCESS)
+            if (metadata->iccProfileSize > 0)
             {
-                SetErrorMessage(errorInfo, "JxlEncoderSetICCProfile failed.");
-                return EncoderStatus::EncodeError;
+                if (JxlEncoderSetICCProfile(
+                    enc.get(),
+                    metadata->iccProfile,
+                    metadata->iccProfileSize) != JXL_ENC_SUCCESS)
+                {
+                    SetErrorMessage(errorInfo, "JxlEncoderSetICCProfile failed.");
+                    return EncoderStatus::EncodeError;
+                }
             }
-        }
-        else
-        {
-            JxlColorEncoding colorEncoding{};
-            bool isGray = outputPixelFormat == OutputPixelFormat::Gray || outputPixelFormat == OutputPixelFormat::GrayAlpha;
-
-            JxlColorEncodingSetToSRGB(&colorEncoding, isGray);
-            colorEncoding.rendering_intent = JXL_RENDERING_INTENT_PERCEPTUAL;
-
-            if (JxlEncoderSetColorEncoding(enc.get(), &colorEncoding) != JXL_ENC_SUCCESS)
+            else
             {
-                SetErrorMessage(errorInfo, "JxlEncoderSetColorEncoding failed.");
-                return EncoderStatus::EncodeError;
+                JxlColorEncoding colorEncoding{};
+                bool isGray = outputPixelFormat == OutputPixelFormat::Gray || outputPixelFormat == OutputPixelFormat::GrayAlpha;
+
+                JxlColorEncodingSetToSRGB(&colorEncoding, isGray);
+                colorEncoding.rendering_intent = JXL_RENDERING_INTENT_PERCEPTUAL;
+
+                if (JxlEncoderSetColorEncoding(enc.get(), &colorEncoding) != JXL_ENC_SUCCESS)
+                {
+                    SetErrorMessage(errorInfo, "JxlEncoderSetColorEncoding failed.");
+                    return EncoderStatus::EncodeError;
+                }
+            }
+
+            if (metadata->exifSize > 0 || metadata->xmpSize > 0)
+            {
+                if (metadata->exifSize > 0)
+                {
+                    if (JxlEncoderAddBox(
+                        enc.get(),
+                        "Exif",
+                        metadata->exif,
+                        metadata->exifSize,
+                        JXL_FALSE) != JXL_ENC_SUCCESS)
+                    {
+                        SetErrorMessage(errorInfo, "JxlEncoderAddBox failed.");
+                        return EncoderStatus::EncodeError;
+                    }
+                }
+
+                if (metadata->xmpSize > 0)
+                {
+                    if (JxlEncoderAddBox(
+                        enc.get(),
+                        "xml ",
+                        metadata->xmp,
+                        metadata->xmpSize,
+                        JXL_FALSE) != JXL_ENC_SUCCESS)
+                    {
+                        SetErrorMessage(errorInfo, "JxlEncoderAddBox failed.");
+                        return EncoderStatus::EncodeError;
+                    }
+                }
             }
         }
 

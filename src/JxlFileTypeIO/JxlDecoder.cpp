@@ -67,6 +67,26 @@ namespace
             dest++;
         }
     }
+
+    DecoderStatus SetMetadata(
+        DecoderCallbacks* callbacks,
+        MetadataType type,
+        const uint8_t* data,
+        size_t dataSize)
+    {
+        void* outBuffer = callbacks->createMetadataBuffer(type, dataSize);
+
+        if (outBuffer)
+        {
+            memcpy_s(outBuffer, dataSize, data, dataSize);
+        }
+        else
+        {
+            return DecoderStatus::CreateMetadataBufferError;
+        }
+
+        return DecoderStatus::Ok;
+    }
 }
 
 DecoderStatus DecoderReadImage(
@@ -90,7 +110,8 @@ DecoderStatus DecoderReadImage(
             dec.get(),
             JXL_DEC_BASIC_INFO |
             JXL_DEC_COLOR_ENCODING |
-            JXL_DEC_FULL_IMAGE) != JXL_DEC_SUCCESS)
+            JXL_DEC_FULL_IMAGE |
+            JXL_DEC_BOX) != JXL_DEC_SUCCESS)
         {
             SetErrorMessage(errorInfo, "JxlDecoderSubscribeEvents failed.");
             return DecoderStatus::DecodeError;
@@ -105,14 +126,26 @@ DecoderStatus DecoderReadImage(
             return DecoderStatus::DecodeError;
         }
 
+        bool decompressBox = true;
+
+        if (JxlDecoderSetDecompressBoxes(dec.get(), JXL_TRUE) != JXL_DEC_SUCCESS)
+        {
+            decompressBox = false;
+        }
+
         JxlDecoderSetInput(dec.get(), data, dataSize);
+        JxlDecoderCloseInput(dec.get());
 
         bool firstFrameDecoded = false;
         JxlBasicInfo basicInfo{};
         JxlPixelFormat format{ 4, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0 };
         ImageOutState imageOutState{};
 
-        // TODO: Implement EXIF and XMP reading when libjxl v0.7.0 is released.
+        std::vector<uint8_t> boxMetadataBuffer;
+        size_t boxMetadataBufferOffset = 0;
+        constexpr size_t boxMetadataChunkSize = 65536;
+        bool readingExifBox = false;
+        bool readingXmpBox = false;
 
         while (true)
         {
@@ -122,6 +155,106 @@ DecoderStatus DecoderReadImage(
             {
                 SetErrorMessage(errorInfo, "JxlDecoderProcessInput failed.");
                 return DecoderStatus::DecodeError;
+            }
+            else if (status == JXL_DEC_BOX)
+            {
+                if (readingExifBox)
+                {
+                    readingExifBox = false;
+
+                    size_t remaining = JxlDecoderReleaseBoxBuffer(dec.get());
+
+                    DecoderStatus error = SetMetadata(
+                        callbacks,
+                        MetadataType::Exif,
+                        boxMetadataBuffer.data(),
+                        boxMetadataBuffer.size() - remaining);
+
+                    if (error != DecoderStatus::Ok)
+                    {
+                        return error;
+                    }
+                }
+                else if (readingXmpBox)
+                {
+                    readingXmpBox = false;
+
+                    size_t remaining = JxlDecoderReleaseBoxBuffer(dec.get());
+
+                    DecoderStatus error = SetMetadata(
+                        callbacks,
+                        MetadataType::Xmp,
+                        boxMetadataBuffer.data(),
+                        boxMetadataBuffer.size() - remaining);
+
+                    if (error != DecoderStatus::Ok)
+                    {
+                        return error;
+                    }
+                }
+
+                JxlBoxType type;
+
+                if (JxlDecoderGetBoxType(dec.get(), type, decompressBox) != JXL_DEC_SUCCESS)
+                {
+                    SetErrorMessage(errorInfo, "JxlDecoderGetBoxType failed.");
+                    return DecoderStatus::DecodeError;
+                }
+
+                if (memcmp(type, "Exif", 4) == 0)
+                {
+                    readingExifBox = true;
+
+                    if (boxMetadataBuffer.size() < boxMetadataChunkSize)
+                    {
+                        boxMetadataBuffer.resize(boxMetadataChunkSize);
+                    }
+                    boxMetadataBufferOffset = 0;
+
+                    if (JxlDecoderSetBoxBuffer(
+                        dec.get(),
+                        boxMetadataBuffer.data(),
+                        boxMetadataBuffer.size()) != JXL_DEC_SUCCESS)
+                    {
+                        SetErrorMessage(errorInfo, "JxlDecoderSetBoxBuffer failed.");
+                        return DecoderStatus::DecodeError;
+                    }
+                }
+                else if (memcmp(type, "xml ", 4) == 0)
+                {
+                    readingXmpBox = true;
+
+                    if (boxMetadataBuffer.size() < boxMetadataChunkSize)
+                    {
+                        boxMetadataBuffer.resize(boxMetadataChunkSize);
+                    }
+                    boxMetadataBufferOffset = 0;
+
+                    if (JxlDecoderSetBoxBuffer(
+                        dec.get(),
+                        boxMetadataBuffer.data(),
+                        boxMetadataBuffer.size()) != JXL_DEC_SUCCESS)
+                    {
+                        SetErrorMessage(errorInfo, "JxlDecoderSetBoxBuffer failed.");
+                        return DecoderStatus::DecodeError;
+                    }
+                }
+            }
+            else if (status == JXL_DEC_BOX_NEED_MORE_OUTPUT)
+            {
+                size_t remaining = JxlDecoderReleaseBoxBuffer(dec.get());
+
+                boxMetadataBufferOffset += boxMetadataChunkSize - remaining;
+                boxMetadataBuffer.resize(boxMetadataBuffer.size() + boxMetadataChunkSize);
+
+                if (JxlDecoderSetBoxBuffer(
+                    dec.get(),
+                    boxMetadataBuffer.data() + boxMetadataBufferOffset,
+                    boxMetadataBuffer.size() - boxMetadataBufferOffset) != JXL_DEC_SUCCESS)
+                {
+                    SetErrorMessage(errorInfo, "JxlDecoderSetBoxBuffer failed.");
+                    return DecoderStatus::DecodeError;
+                }
             }
             else if (status == JXL_DEC_BASIC_INFO)
             {
@@ -263,7 +396,44 @@ DecoderStatus DecoderReadImage(
             }
             else if (status == JXL_DEC_SUCCESS)
             {
-                break;
+                if (readingExifBox)
+                {
+                    readingExifBox = false;
+
+                    size_t remaining = JxlDecoderReleaseBoxBuffer(dec.get());
+
+                    DecoderStatus error = SetMetadata(
+                        callbacks,
+                        MetadataType::Exif,
+                        boxMetadataBuffer.data(),
+                        boxMetadataBuffer.size() - remaining);
+
+                    if (error != DecoderStatus::Ok)
+                    {
+                        return error;
+                    }
+                }
+                else if (readingXmpBox)
+                {
+                    readingXmpBox = false;
+
+                    size_t remaining = JxlDecoderReleaseBoxBuffer(dec.get());
+
+                    DecoderStatus error = SetMetadata(
+                        callbacks,
+                        MetadataType::Xmp,
+                        boxMetadataBuffer.data(),
+                        boxMetadataBuffer.size() - remaining);
+
+                    if (error != DecoderStatus::Ok)
+                    {
+                        return error;
+                    }
+                }
+                else
+                {
+                    break;
+                }
             }
         }
     }

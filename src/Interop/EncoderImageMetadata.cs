@@ -17,11 +17,15 @@ namespace JpegXLFileTypePlugin.Interop
     [StructLayout(LayoutKind.Sequential)]
     internal sealed class EncoderImageMetadata
     {
+        public byte[]? exif;
         public byte[]? iccProfile;
+        public byte[]? xmp;
 
-        public EncoderImageMetadata(byte[]? iccProfileBytes)
+        public EncoderImageMetadata(byte[]? exifBytes, byte[]? iccProfileBytes, byte[]? xmpBytes)
         {
+            exif = exifBytes;
             iccProfile = iccProfileBytes;
+            xmp = xmpBytes;
         }
     }
 }
