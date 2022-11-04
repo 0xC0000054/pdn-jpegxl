@@ -293,21 +293,21 @@ EncoderStatus EncoderWriteImage(
             return EncoderStatus::UserCancelled;
         }
 
-        JxlEncoderOptions* encoderOptions = JxlEncoderOptionsCreate(enc.get(), nullptr);
+        JxlEncoderFrameSettings* encoderOptions = JxlEncoderFrameSettingsCreate(enc.get(), nullptr);
 
-        if (JxlEncoderOptionsSetDistance(encoderOptions, options->distance) != JXL_ENC_SUCCESS)
+        if (JxlEncoderSetFrameDistance(encoderOptions, options->distance) != JXL_ENC_SUCCESS)
         {
             SetErrorMessage(errorInfo, "JxlEncoderOptionsSetDistance failed.");
             return EncoderStatus::EncodeError;
         }
 
-        if (JxlEncoderOptionsSetLossless(encoderOptions, options->lossless) != JXL_ENC_SUCCESS)
+        if (JxlEncoderSetFrameLossless(encoderOptions, options->lossless) != JXL_ENC_SUCCESS)
         {
             SetErrorMessage(errorInfo, "JxlEncoderOptionsSetLossless failed.");
             return EncoderStatus::EncodeError;
         }
 
-        if (JxlEncoderOptionsSetEffort(encoderOptions, options->speed) != JXL_ENC_SUCCESS)
+        if (JxlEncoderFrameSettingsSetOption(encoderOptions, JXL_ENC_FRAME_SETTING_EFFORT, options->speed) != JXL_ENC_SUCCESS)
         {
             SetErrorMessage(errorInfo, "JxlEncoderOptionsSetEffort failed.");
             return EncoderStatus::EncodeError;
