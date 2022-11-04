@@ -416,14 +416,14 @@ EncoderStatus EncoderWriteImage(
             return EncoderStatus::EncodeError;
         }
 
-        compressed.resize(next_out - compressed.data());
-
         if (!ReportProgress(progressCallback, 95))
         {
             return EncoderStatus::UserCancelled;
         }
 
-        if (!writeDataCallback(compressed.data(), compressed.size()))
+        const size_t compressedDataSize = next_out - compressed.data();
+
+        if (!writeDataCallback(compressed.data(), compressedDataSize))
         {
             return EncoderStatus::WriteError;
         }
