@@ -1,0 +1,10 @@
+{
+  "name": "pdn-jpegxl",
+  "version": "1.0.0",
+  "description": "A Paint.NET filetype plugin that loads and saves JPEG XL images.",
+  "homepage": "https://github.com/0xC0000054/pdn-jpegxl",
+  "dependencies": [
+    "libjxl"
+  ],
+  "builtin-baseline": "e3a3942a9eb0cb47c12898e5fd819f258441b6f6"
+}
