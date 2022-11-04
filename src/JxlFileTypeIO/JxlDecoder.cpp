@@ -256,6 +256,11 @@ DecoderStatus DecoderReadImage(
                     return DecoderStatus::HasMultipleFrames;
                 }
             }
+            else if (status == JXL_DEC_NEED_MORE_INPUT)
+            {
+                SetErrorMessage(errorInfo, "JxlDecoderProcessInput needs more input, but it already received the entire image.");
+                return DecoderStatus::DecodeError;
+            }
             else if (status == JXL_DEC_SUCCESS)
             {
                 break;
