@@ -150,6 +150,7 @@ DecoderStatus DecoderReadImage(
         std::vector<uint8_t> boxMetadataBuffer;
         size_t boxMetadataBufferOffset = 0;
         constexpr size_t boxMetadataChunkSize = 65536;
+        bool foundExifBox = false;
         bool readingExifBox = false;
         bool readingXmpBox = false;
 
@@ -209,21 +210,25 @@ DecoderStatus DecoderReadImage(
 
                 if (memcmp(type, "Exif", 4) == 0)
                 {
-                    readingExifBox = true;
-
-                    if (boxMetadataBuffer.size() < boxMetadataChunkSize)
+                    if (!foundExifBox)
                     {
-                        boxMetadataBuffer.resize(boxMetadataChunkSize);
-                    }
-                    boxMetadataBufferOffset = 0;
+                        foundExifBox = true;
+                        readingExifBox = true;
 
-                    if (JxlDecoderSetBoxBuffer(
-                        dec.get(),
-                        boxMetadataBuffer.data(),
-                        boxMetadataBuffer.size()) != JXL_DEC_SUCCESS)
-                    {
-                        SetErrorMessage(errorInfo, "JxlDecoderSetBoxBuffer failed.");
-                        return DecoderStatus::DecodeError;
+                        if (boxMetadataBuffer.size() < boxMetadataChunkSize)
+                        {
+                            boxMetadataBuffer.resize(boxMetadataChunkSize);
+                        }
+                        boxMetadataBufferOffset = 0;
+
+                        if (JxlDecoderSetBoxBuffer(
+                            dec.get(),
+                            boxMetadataBuffer.data(),
+                            boxMetadataBuffer.size()) != JXL_DEC_SUCCESS)
+                        {
+                            SetErrorMessage(errorInfo, "JxlDecoderSetBoxBuffer failed.");
+                            return DecoderStatus::DecodeError;
+                        }
                     }
                 }
                 else if (memcmp(type, "xml ", 4) == 0)
