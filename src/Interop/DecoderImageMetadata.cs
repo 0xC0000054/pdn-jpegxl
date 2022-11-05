@@ -94,6 +94,16 @@ namespace JpegXLFileTypePlugin.Interop
                 iccProfileBytesHandle.Free();
             }
 
+            if (exifBytesHandle.IsAllocated)
+            {
+                exifBytesHandle.Free();
+            }
+
+            if (xmlBytesHandle.IsAllocated)
+            {
+                xmlBytesHandle.Free();
+            }
+
             base.Dispose(disposing);
         }
     }
