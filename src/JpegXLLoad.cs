@@ -75,6 +75,8 @@ namespace JpegXLFileTypePlugin
                 if (exifValues != null)
                 {
                     exifValues.Remove(ExifPropertyKeys.Image.InterColorProfile.Path);
+                    // JPEG XL does not use the EXIF data for rotation.
+                    exifValues.Remove(ExifPropertyKeys.Image.Orientation.Path);
 
                     foreach (KeyValuePair<ExifPropertyPath, ExifValue> item in exifValues)
                     {
