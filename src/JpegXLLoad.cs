@@ -87,15 +87,16 @@ namespace JpegXLFileTypePlugin
                 }
             }
 
-            byte[]? xmpBytes = imageMetadata.TryGetXmpBytes();
+            IReadOnlyList<byte[]> xmlMetadata = imageMetadata.GetXmlMetadata();
 
-            if (xmpBytes != null)
+            foreach (byte[] xmlMetadataItem in xmlMetadata)
             {
-                XmpPacket? xmpPacket = XmpPacket.TryParse(xmpBytes);
+                XmpPacket? xmpPacket = XmpPacket.TryParse(xmlMetadataItem);
 
                 if (xmpPacket != null)
                 {
                     document.Metadata.SetXmpPacket(xmpPacket);
+                    break;
                 }
             }
         }

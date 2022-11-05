@@ -12,6 +12,7 @@
 
 using PaintDotNet;
 using System;
+using System.Collections.Generic;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 
@@ -23,8 +24,15 @@ namespace JpegXLFileTypePlugin.Interop
         private GCHandle iccProfileBytesHandle;
         private byte[]? exifBytes;
         private GCHandle exifBytesHandle;
-        private byte[]? xmpBytes;
-        private GCHandle xmpBytesHandle;
+        private readonly List<byte[]> xmlMetadataChunks;
+        private GCHandle xmlBytesHandle;
+
+        public DecoderImageMetadata()
+        {
+            iccProfileBytes = null;
+            exifBytes = null;
+            xmlMetadataChunks = new List<byte[]>();
+        }
 
         public ExceptionDispatchInfo? ExceptionInfo { get; private set; }
 
@@ -50,9 +58,17 @@ namespace JpegXLFileTypePlugin.Interop
                     }
                     else if (type == MetadataType.Xmp)
                     {
-                        xmpBytes = new byte[size];
-                        xmpBytesHandle = GCHandle.Alloc(xmpBytes, GCHandleType.Pinned);
-                        bufferPtr = xmpBytesHandle.AddrOfPinnedObject();
+                        if (xmlBytesHandle.IsAllocated)
+                        {
+                            xmlBytesHandle.Free();
+                        }
+
+                        int index = xmlMetadataChunks.Count;
+
+                        xmlMetadataChunks.Add(new byte[size]);
+
+                        xmlBytesHandle = GCHandle.Alloc(xmlMetadataChunks[index], GCHandleType.Pinned);
+                        bufferPtr = xmlBytesHandle.AddrOfPinnedObject();
                     }
                 }
             }
@@ -69,7 +85,7 @@ namespace JpegXLFileTypePlugin.Interop
 
         public byte[]? TryGetIccProfileBytes() => iccProfileBytes;
 
-        public byte[]? TryGetXmpBytes() => xmpBytes;
+        public IReadOnlyList<byte[]> GetXmlMetadata() => xmlMetadataChunks;
 
         protected override void Dispose(bool disposing)
         {
