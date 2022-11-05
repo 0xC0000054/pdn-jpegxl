@@ -296,34 +296,31 @@ EncoderStatus EncoderWriteImage(
                 }
             }
 
-            if (metadata->exifSize > 0 || metadata->xmpSize > 0)
+            if (metadata->exifSize > 0)
             {
-                if (metadata->exifSize > 0)
+                if (JxlEncoderAddBox(
+                    enc.get(),
+                    "Exif",
+                    metadata->exif,
+                    metadata->exifSize,
+                    JXL_FALSE) != JXL_ENC_SUCCESS)
                 {
-                    if (JxlEncoderAddBox(
-                        enc.get(),
-                        "Exif",
-                        metadata->exif,
-                        metadata->exifSize,
-                        JXL_FALSE) != JXL_ENC_SUCCESS)
-                    {
-                        SetErrorMessage(errorInfo, "JxlEncoderAddBox failed.");
-                        return EncoderStatus::EncodeError;
-                    }
+                    SetErrorMessage(errorInfo, "JxlEncoderAddBox failed.");
+                    return EncoderStatus::EncodeError;
                 }
+            }
 
-                if (metadata->xmpSize > 0)
+            if (metadata->xmpSize > 0)
+            {
+                if (JxlEncoderAddBox(
+                    enc.get(),
+                    "xml ",
+                    metadata->xmp,
+                    metadata->xmpSize,
+                    JXL_FALSE) != JXL_ENC_SUCCESS)
                 {
-                    if (JxlEncoderAddBox(
-                        enc.get(),
-                        "xml ",
-                        metadata->xmp,
-                        metadata->xmpSize,
-                        JXL_FALSE) != JXL_ENC_SUCCESS)
-                    {
-                        SetErrorMessage(errorInfo, "JxlEncoderAddBox failed.");
-                        return EncoderStatus::EncodeError;
-                    }
+                    SetErrorMessage(errorInfo, "JxlEncoderAddBox failed.");
+                    return EncoderStatus::EncodeError;
                 }
             }
         }
