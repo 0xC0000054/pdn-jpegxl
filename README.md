@@ -24,7 +24,7 @@ See [License.txt](License.txt) for more information.
 ## Prerequisites
 
 * Visual Studio 2022
-* Paint.NET 4.3.12 or later
+* Paint.NET 5.0 or later
 * The `libjxl` package from [vcpkg](https://github.com/microsoft/vcpkg)
 
 ## Building the plugin
