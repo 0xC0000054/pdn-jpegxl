@@ -10,7 +10,7 @@
 //
 ////////////////////////////////////////////////////////////////////////
 
-using PaintDotNet;
+using System;
 using System.Collections.Generic;
 
 namespace JpegXLFileTypePlugin.Exif
@@ -19,10 +19,7 @@ namespace JpegXLFileTypePlugin.Exif
     {
         internal static T[] AsArrayOrToArray<T>(this IReadOnlyList<T> items)
         {
-            if (items is null)
-            {
-                ExceptionUtil.ThrowArgumentNullException(nameof(items));
-            }
+            ArgumentNullException.ThrowIfNull(items);
 
             T[]? asArray = items as T[];
 

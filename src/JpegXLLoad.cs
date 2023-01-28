@@ -14,7 +14,7 @@ using JpegXLFileTypePlugin.Exif;
 using JpegXLFileTypePlugin.Interop;
 using PaintDotNet;
 using PaintDotNet.Imaging;
-using PaintDotNet.IO;
+using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -27,7 +27,7 @@ namespace JpegXLFileTypePlugin
             Document doc;
 
             byte[] data = new byte[input.Length];
-            input.ProperRead(data, 0, data.Length);
+            input.ReadExactly(data, 0, data.Length);
 
             using (DecoderLayerData layerData = new())
             using (DecoderImageMetadata imageMetadata = new())
@@ -38,7 +38,7 @@ namespace JpegXLFileTypePlugin
 
                 if (layer is null)
                 {
-                    ExceptionUtil.ThrowInvalidOperationException("The layer is null.");
+                    throw new InvalidOperationException("The layer is null.");
                 }
 
                 doc = new Document(layer.Width, layer.Height);
