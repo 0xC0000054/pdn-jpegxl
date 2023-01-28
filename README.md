@@ -5,7 +5,7 @@ A [Paint.NET](http://www.getpaint.net) filetype plugin that loads and saves JPEG
 ## Installation
 
 1. Close Paint.NET.
-2. Place JpegXLFileType.dll, JpegXLFileTypeIO_ARM64.dll, JpegXLFileTypeIO_x86.dll and JpegXLFileTypeIO_x64.dll in the Paint.NET FileTypes folder which is usually located in one the following locations depending on the Paint.NET version you have installed.
+2. Place JpegXLFileType.dll, JpegXLFileTypeIO_ARM64.dll and JpegXLFileTypeIO_x64.dll in the Paint.NET FileTypes folder which is usually located in one the following locations depending on the Paint.NET version you have installed.
 
   Paint.NET Version |  FileTypes Folder Location
   --------|----------
