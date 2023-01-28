@@ -46,10 +46,6 @@ namespace JpegXLFileTypePlugin.Interop
                 {
                     status = JpegXL_Arm64.LoadImage(callbacks, data, dataSize, ref errorInfo);
                 }
-                else if (RuntimeInformation.ProcessArchitecture == Architecture.X86)
-                {
-                    status = JpegXL_X86.LoadImage(callbacks, data, dataSize, ref errorInfo);
-                }
                 else
                 {
                     throw new PlatformNotSupportedException();
@@ -93,10 +89,6 @@ namespace JpegXLFileTypePlugin.Interop
                 else if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
                 {
                     status = JpegXL_Arm64.SaveImage(ref bitmapData, options, metadata, ref errorInfo, progressCallback, writeDataCallback);
-                }
-                else if (RuntimeInformation.ProcessArchitecture == Architecture.X86)
-                {
-                    status = JpegXL_X86.SaveImage(ref bitmapData, options, metadata, ref errorInfo, progressCallback, writeDataCallback);
                 }
                 else
                 {
