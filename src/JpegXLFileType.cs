@@ -21,7 +21,9 @@ namespace JpegXLFileTypePlugin
 {
     internal sealed class JpegXLFileType : PropertyBasedFileType
     {
+#pragma warning disable IDE0060 // Remove unused parameter
         public JpegXLFileType(IFileTypeHost host)
+#pragma warning restore IDE0060 // Remove unused parameter
             : base("JPEG XL", new FileTypeOptions
             {
                 LoadExtensions = new string[] { ".jxl" },
@@ -61,17 +63,17 @@ namespace JpegXLFileTypePlugin
         {
             ControlInfo info = CreateDefaultSaveConfigUI(props);
 
-            PropertyControlInfo qualityPCI = info.FindControlForPropertyName(PropertyNames.Quality);
-            qualityPCI.ControlProperties[ControlInfoPropertyNames.DisplayName].Value = Resources.Quality_DisplayName;
-            qualityPCI.ControlProperties[ControlInfoPropertyNames.Description].Value = string.Empty;
+            PropertyControlInfo qualityPCI = info.FindControlForPropertyName(PropertyNames.Quality)!;
+            qualityPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = Resources.Quality_DisplayName;
+            qualityPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = string.Empty;
 
-            PropertyControlInfo losslessPCI = info.FindControlForPropertyName(PropertyNames.Lossless);
-            losslessPCI.ControlProperties[ControlInfoPropertyNames.DisplayName].Value = string.Empty;
-            losslessPCI.ControlProperties[ControlInfoPropertyNames.Description].Value = Resources.Lossless_Description;
+            PropertyControlInfo losslessPCI = info.FindControlForPropertyName(PropertyNames.Lossless)!;
+            losslessPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = string.Empty;
+            losslessPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = Resources.Lossless_Description;
 
-            PropertyControlInfo encoderSpeedPCI = info.FindControlForPropertyName(PropertyNames.EncoderSpeed);
-            encoderSpeedPCI.ControlProperties[ControlInfoPropertyNames.DisplayName].Value = Resources.EncoderSpeed_DisplayName;
-            encoderSpeedPCI.ControlProperties[ControlInfoPropertyNames.Description].Value = Resources.EncoderSpeed_Description;
+            PropertyControlInfo encoderSpeedPCI = info.FindControlForPropertyName(PropertyNames.EncoderSpeed)!;
+            encoderSpeedPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = Resources.EncoderSpeed_DisplayName;
+            encoderSpeedPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = Resources.EncoderSpeed_Description;
 
             return info;
         }
@@ -87,9 +89,9 @@ namespace JpegXLFileTypePlugin
                                         Surface scratchSurface,
                                         ProgressEventHandler progressCallback)
         {
-            int quality = token.GetProperty<Int32Property>(PropertyNames.Quality).Value;
-            bool lossless = token.GetProperty<BooleanProperty>(PropertyNames.Lossless).Value;
-            int speed = token.GetProperty<Int32Property>(PropertyNames.EncoderSpeed).Value;
+            int quality = token.GetProperty<Int32Property>(PropertyNames.Quality)!.Value;
+            bool lossless = token.GetProperty<BooleanProperty>(PropertyNames.Lossless)!.Value;
+            int speed = token.GetProperty<Int32Property>(PropertyNames.EncoderSpeed)!.Value;
 
             JpegXLSave.Save(input, output, scratchSurface, progressCallback, quality, lossless, speed);
         }
