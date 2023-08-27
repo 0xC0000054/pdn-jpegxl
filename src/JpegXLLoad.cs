@@ -34,13 +34,7 @@ namespace JpegXLFileTypePlugin
             {
                 JpegXLNative.LoadImage(data, layerData, imageMetadata);
 
-                BitmapLayer? layer = layerData.Layer;
-
-                if (layer is null)
-                {
-                    throw new InvalidOperationException("The layer is null.");
-                }
-
+                BitmapLayer? layer = layerData.Layer ?? throw new InvalidOperationException("The layer is null.");
                 doc = new Document(layer.Width, layer.Height);
 
                 AddMetadataToDocument(imageMetadata, doc);
