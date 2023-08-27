@@ -19,6 +19,9 @@ namespace JpegXLFileTypePlugin.Interop
         private const string DllName = "JpegXLFileType_ARM64.dll";
 
         [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
+        internal static extern uint GetLibJxlVersion();
+
+        [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
         internal static extern unsafe DecoderStatus LoadImage(DecoderCallbacks callbacks,
                                                               byte* data,
                                                               nuint dataSize,

@@ -123,6 +123,12 @@
   <data name="EncoderSpeed_DisplayName" xml:space="preserve">
     <value>Encoder Speed</value>
   </data>
+  <data name="ForumLink_Description" xml:space="preserve">
+    <value>Forum Discussion</value>
+  </data>
+  <data name="ForumLink_DisplayName" xml:space="preserve">
+    <value>More Info</value>
+  </data>
   <data name="Lossless_Description" xml:space="preserve">
     <value>Lossless</value>
   </data>

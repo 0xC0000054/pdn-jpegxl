@@ -13,6 +13,12 @@
 #include "JxlFileTypeIO.h"
 #include "JxlDecoder.h"
 #include "JxlEncoder.h"
+#include "jxl/version.h"
+
+uint32_t __stdcall GetLibJxlVersion()
+{
+    return JPEGXL_NUMERIC_VERSION;
+}
 
 DecoderStatus __stdcall LoadImage(
     DecoderCallbacks* callbacks,

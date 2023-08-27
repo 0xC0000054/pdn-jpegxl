@@ -79,6 +79,24 @@ namespace JpegXLFileTypePlugin.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Forum Discussion.
+        /// </summary>
+        internal static string ForumLink_Description {
+            get {
+                return ResourceManager.GetString("ForumLink_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to More Info.
+        /// </summary>
+        internal static string ForumLink_DisplayName {
+            get {
+                return ResourceManager.GetString("ForumLink_DisplayName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Lossless.
         /// </summary>
         internal static string Lossless_Description {

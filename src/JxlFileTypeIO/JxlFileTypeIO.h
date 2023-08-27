@@ -26,6 +26,8 @@
 extern "C" {
 #endif
 
+JXLFILETYPEIO_API uint32_t __stdcall GetLibJxlVersion();
+
 JXLFILETYPEIO_API DecoderStatus __stdcall LoadImage(
     DecoderCallbacks* callbacks,
     const uint8_t* data,

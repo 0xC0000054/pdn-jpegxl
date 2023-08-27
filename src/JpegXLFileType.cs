@@ -14,6 +14,7 @@ using JpegXLFileTypePlugin.Properties;
 using PaintDotNet;
 using PaintDotNet.IndirectUI;
 using PaintDotNet.PropertySystem;
+using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -39,7 +40,10 @@ namespace JpegXLFileTypePlugin
             Quality,
             Lossless,
             EncoderSpeed,
-            GitHubLink
+            ForumLink,
+            GitHubLink,
+            PluginVersion,
+            LibJxlVersion
         }
 
         public override PropertyCollection OnCreateSavePropertyCollection()
@@ -49,6 +53,10 @@ namespace JpegXLFileTypePlugin
                 new Int32Property(PropertyNames.Quality, 90, 0, 100),
                 new BooleanProperty(PropertyNames.Lossless, false),
                 new Int32Property(PropertyNames.EncoderSpeed, 7, 1, 9),
+                new UriProperty(PropertyNames.ForumLink, new Uri("https://forums.getpaint.net/topic/120716-jpeg-xl-filetype")),
+                new UriProperty (PropertyNames.GitHubLink, new Uri("https://github.com/0xC0000054/pdn-jpegxl")),
+                new StringProperty(PropertyNames.PluginVersion),
+                new StringProperty(PropertyNames.LibJxlVersion)
             };
 
             List<PropertyCollectionRule> rules = new()
@@ -74,6 +82,24 @@ namespace JpegXLFileTypePlugin
             PropertyControlInfo encoderSpeedPCI = info.FindControlForPropertyName(PropertyNames.EncoderSpeed)!;
             encoderSpeedPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = Resources.EncoderSpeed_DisplayName;
             encoderSpeedPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = Resources.EncoderSpeed_Description;
+
+            PropertyControlInfo forumLinkPCI = info.FindControlForPropertyName(PropertyNames.ForumLink)!;
+            forumLinkPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = Resources.ForumLink_DisplayName;
+            forumLinkPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = Resources.ForumLink_Description;
+
+            PropertyControlInfo githubLinkPCI = info.FindControlForPropertyName(PropertyNames.GitHubLink)!;
+            githubLinkPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = string.Empty;
+            githubLinkPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = "GitHub"; // GitHub is a brand name that should not be localized.
+
+            PropertyControlInfo pluginVersionPCI = info.FindControlForPropertyName(PropertyNames.PluginVersion)!;
+            pluginVersionPCI.ControlType.Value = PropertyControlType.Label;
+            pluginVersionPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = string.Empty;
+            pluginVersionPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = "JpegXLFileType v" + VersionInfo.PluginVersion;
+
+            PropertyControlInfo libwebpVersionPCI = info.FindControlForPropertyName(PropertyNames.LibJxlVersion)!;
+            libwebpVersionPCI.ControlType.Value = PropertyControlType.Label;
+            libwebpVersionPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = string.Empty;
+            libwebpVersionPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = "libjxl v" + VersionInfo.LibJxlVersion;
 
             return info;
         }

@@ -20,6 +20,30 @@ namespace JpegXLFileTypePlugin.Interop
 {
     internal static class JpegXLNative
     {
+        internal static Version GetLibJxlVersion()
+        {
+            uint packedVersionNumber;
+
+            if (RuntimeInformation.ProcessArchitecture == Architecture.X64)
+            {
+                packedVersionNumber = JpegXL_X64.GetLibJxlVersion();
+            }
+            else if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
+            {
+                packedVersionNumber = JpegXL_Arm64.GetLibJxlVersion();
+            }
+            else
+            {
+                throw new PlatformNotSupportedException();
+            }
+
+            int major = (int)((packedVersionNumber >> 24) & 0xff);
+            int minor = (int)((packedVersionNumber >> 16) & 0xff);
+            int patch = (int)((packedVersionNumber >> 8) & 0xff);
+
+            return new Version(major, minor, patch);
+        }
+
         internal static unsafe void LoadImage(byte[] imageData,
                                               DecoderLayerData layerData,
                                               DecoderImageMetadata imageMetadata)

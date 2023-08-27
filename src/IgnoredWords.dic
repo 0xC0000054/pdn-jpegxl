@@ -2,6 +2,10 @@ config
 endianess
 exif
 ifd
+interop
 jpeg
 jxl
+libjxl
+metadata
 plugin
+xmp
