@@ -108,11 +108,11 @@ namespace JpegXLFileTypePlugin.Interop
 
                 if (RuntimeInformation.ProcessArchitecture == Architecture.X64)
                 {
-                    status = JpegXL_X64.SaveImage(ref bitmapData, options, metadata, ref errorInfo, progressCallback, writeDataCallback);
+                    status = JpegXL_X64.SaveImage(bitmapData, options, metadata, ref errorInfo, progressCallback, writeDataCallback);
                 }
                 else if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
                 {
-                    status = JpegXL_Arm64.SaveImage(ref bitmapData, options, metadata, ref errorInfo, progressCallback, writeDataCallback);
+                    status = JpegXL_Arm64.SaveImage(bitmapData, options, metadata, ref errorInfo, progressCallback, writeDataCallback);
                 }
                 else
                 {

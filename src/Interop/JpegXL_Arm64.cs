@@ -14,26 +14,28 @@ using System.Runtime.InteropServices;
 
 namespace JpegXLFileTypePlugin.Interop
 {
-    internal static class JpegXL_Arm64
+    internal static partial class JpegXL_Arm64
     {
         private const string DllName = "JpegXLFileType_ARM64.dll";
 
-        [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
-        internal static extern uint GetLibJxlVersion();
+        [LibraryImport(DllName)]
+        [UnmanagedCallConv(CallConvs = new System.Type[] { typeof(System.Runtime.CompilerServices.CallConvStdcall) })]
+        internal static partial uint GetLibJxlVersion();
 
-        [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
-        internal static extern unsafe DecoderStatus LoadImage(DecoderCallbacks callbacks,
-                                                              byte* data,
-                                                              nuint dataSize,
-                                                              ref ErrorInfo errorInfo);
+        [LibraryImport(DllName)]
+        [UnmanagedCallConv(CallConvs = new System.Type[] { typeof(System.Runtime.CompilerServices.CallConvStdcall) })]
+        internal static unsafe partial DecoderStatus LoadImage(in DecoderCallbacks callbacks,
+                                                               byte* data,
+                                                               nuint dataSize,
+                                                               ref ErrorInfo errorInfo);
 
-        [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
-        internal static extern EncoderStatus SaveImage([In] ref BitmapData bitmap,
-                                                       EncoderOptions options,
-                                                       [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(EncoderImageMetadataMarshaller))] EncoderImageMetadata? metadata,
-                                                       ref ErrorInfo errorInfo,
-                                                       [MarshalAs(UnmanagedType.FunctionPtr)] ProgressCallback? progressCallback,
-                                                       [MarshalAs(UnmanagedType.FunctionPtr)] WriteDataCallback writeDataCallback);
-
+        [LibraryImport(DllName)]
+        [UnmanagedCallConv(CallConvs = new System.Type[] { typeof(System.Runtime.CompilerServices.CallConvStdcall) })]
+        internal static partial EncoderStatus SaveImage(in BitmapData bitmap,
+                                                        in EncoderOptions options,
+                                                        in EncoderImageMetadata? metadata,
+                                                        ref ErrorInfo errorInfo,
+                                                        [MarshalAs(UnmanagedType.FunctionPtr)] ProgressCallback? progressCallback,
+                                                        [MarshalAs(UnmanagedType.FunctionPtr)] WriteDataCallback writeDataCallback);
     }
 }

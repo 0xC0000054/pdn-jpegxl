@@ -16,13 +16,10 @@ using System.Runtime.InteropServices;
 namespace JpegXLFileTypePlugin.Interop
 {
     [StructLayout(LayoutKind.Sequential)]
-    internal sealed class DecoderCallbacks
+    internal readonly struct DecoderCallbacks
     {
-        [MarshalAs(UnmanagedType.FunctionPtr)]
-        public readonly DecoderCreateLayerCallback createLayer;
-
-        [MarshalAs(UnmanagedType.FunctionPtr)]
-        public readonly DecoderCreateMetadataBufferCallback createMetadataBuffer;
+        public readonly nint createLayer;
+        public readonly nint createMetadataBuffer;
 
         public DecoderCallbacks(DecoderCreateLayerCallback createLayer,
                                 DecoderCreateMetadataBufferCallback createMetadataBuffer)
@@ -30,8 +27,8 @@ namespace JpegXLFileTypePlugin.Interop
             ArgumentNullException.ThrowIfNull(createLayer);
             ArgumentNullException.ThrowIfNull(createMetadataBuffer);
 
-            this.createLayer = createLayer;
-            this.createMetadataBuffer = createMetadataBuffer;
+            this.createLayer = Marshal.GetFunctionPointerForDelegate(createLayer);
+            this.createMetadataBuffer = Marshal.GetFunctionPointerForDelegate(createMetadataBuffer);
         }
     }
 }

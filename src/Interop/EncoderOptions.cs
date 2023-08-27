@@ -10,16 +10,15 @@
 //
 ////////////////////////////////////////////////////////////////////////
 
-using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 
 namespace JpegXLFileTypePlugin.Interop
 {
-    [StructLayout(LayoutKind.Sequential)]
-    internal sealed class EncoderOptions
+    [NativeMarshalling(typeof(Marshaller))]
+    internal sealed partial class EncoderOptions
     {
         public readonly float distance;
         public readonly int speed;
-        [MarshalAs(UnmanagedType.U1)]
         public readonly bool lossless;
 
         public EncoderOptions(int quality, bool lossless, int encoderSpeed)

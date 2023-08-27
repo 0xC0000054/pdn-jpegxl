@@ -10,16 +10,17 @@
 //
 ////////////////////////////////////////////////////////////////////////
 
-using System.Runtime.InteropServices;
+using System;
+using System.Runtime.InteropServices.Marshalling;
 
 namespace JpegXLFileTypePlugin.Interop
 {
-    [StructLayout(LayoutKind.Sequential)]
-    internal sealed class EncoderImageMetadata
+    [NativeMarshalling(typeof(Marshaller))]
+    internal sealed partial class EncoderImageMetadata
     {
-        public byte[]? exif;
-        public byte[]? iccProfile;
-        public byte[]? xmp;
+        public readonly ReadOnlyMemory<byte> exif;
+        public readonly ReadOnlyMemory<byte> iccProfile;
+        public readonly ReadOnlyMemory<byte> xmp;
 
         public EncoderImageMetadata(byte[]? exifBytes, byte[]? iccProfileBytes, byte[]? xmpBytes)
         {
