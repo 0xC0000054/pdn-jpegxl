@@ -643,31 +643,21 @@ namespace JpegXLFileTypePlugin.Exif
 
                     if (count == 1)
                     {
-                        switch (type)
+                        valueString = type switch
                         {
-                            case ExifValueType.SShort:
-                                valueString = ((short)values[0]).ToString(CultureInfo.InvariantCulture);
-                                break;
-                            case ExifValueType.Short:
-                            default:
-                                valueString = values[0].ToString(CultureInfo.InvariantCulture);
-                                break;
-                        }
+                            ExifValueType.SShort => ((short)values[0]).ToString(CultureInfo.InvariantCulture),
+                            _ => values[0].ToString(CultureInfo.InvariantCulture),
+                        };
                     }
                     else
                     {
-                        switch (type)
+                        valueString = type switch
                         {
-                            case ExifValueType.SShort:
-                                valueString = ((short)values[0]).ToString(CultureInfo.InvariantCulture) + "," +
-                                              ((short)values[1]).ToString(CultureInfo.InvariantCulture);
-                                break;
-                            case ExifValueType.Short:
-                            default:
-                                valueString = values[0].ToString(CultureInfo.InvariantCulture) + "," +
-                                              values[1].ToString(CultureInfo.InvariantCulture);
-                                break;
-                        }
+                            ExifValueType.SShort => ((short)values[0]).ToString(CultureInfo.InvariantCulture) + "," +
+                                                                          ((short)values[1]).ToString(CultureInfo.InvariantCulture),
+                            _ => values[0].ToString(CultureInfo.InvariantCulture) + "," +
+                                                                          values[1].ToString(CultureInfo.InvariantCulture),
+                        };
                     }
                 }
                 else

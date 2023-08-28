@@ -25,28 +25,14 @@ namespace JpegXLFileTypePlugin.Exif
         /// </returns>
         public static int GetSizeInBytes(ExifValueType type)
         {
-            switch (type)
+            return type switch
             {
-                case ExifValueType.Byte:
-                case ExifValueType.Ascii:
-                case ExifValueType.Undefined:
-                case (ExifValueType)6: // SByte
-                    return 1;
-                case ExifValueType.Short:
-                case ExifValueType.SShort:
-                    return 2;
-                case ExifValueType.Long:
-                case ExifValueType.SLong:
-                case ExifValueType.Float:
-                case (ExifValueType)13: // IFD
-                    return 4;
-                case ExifValueType.Rational:
-                case ExifValueType.SRational:
-                case ExifValueType.Double:
-                    return 8;
-                default:
-                    return 0;
-            }
+                ExifValueType.Byte or ExifValueType.Ascii or ExifValueType.Undefined or (ExifValueType)6 => 1,
+                ExifValueType.Short or ExifValueType.SShort => 2,
+                ExifValueType.Long or ExifValueType.SLong or ExifValueType.Float or (ExifValueType)13 => 4,
+                ExifValueType.Rational or ExifValueType.SRational or ExifValueType.Double => 8,
+                _ => 0,
+            };
         }
 
         /// <summary>
@@ -59,27 +45,13 @@ namespace JpegXLFileTypePlugin.Exif
         /// </returns>
         public static bool ValueFitsInOffsetField(ExifValueType type, uint count)
         {
-            switch (type)
+            return type switch
             {
-                case ExifValueType.Byte:
-                case ExifValueType.Ascii:
-                case ExifValueType.Undefined:
-                case (ExifValueType)6: // SByte
-                    return count <= 4;
-                case ExifValueType.Short:
-                case ExifValueType.SShort:
-                    return count <= 2;
-                case ExifValueType.Long:
-                case ExifValueType.SLong:
-                case ExifValueType.Float:
-                case (ExifValueType)13: // IFD
-                    return count <= 1;
-                case ExifValueType.Rational:
-                case ExifValueType.SRational:
-                case ExifValueType.Double:
-                default:
-                    return false;
-            }
+                ExifValueType.Byte or ExifValueType.Ascii or ExifValueType.Undefined or (ExifValueType)6 => count <= 4,
+                ExifValueType.Short or ExifValueType.SShort => count <= 2,
+                ExifValueType.Long or ExifValueType.SLong or ExifValueType.Float or (ExifValueType)13 => count <= 1,
+                _ => false,
+            };
         }
     }
 }

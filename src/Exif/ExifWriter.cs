@@ -208,34 +208,14 @@ namespace JpegXLFileTypePlugin.Exif
                 ExifValue entry = item.Value;
 
                 uint lengthInBytes = (uint)entry.Data.Count;
-
-                uint count;
-                switch (entry.Type)
+                var count = entry.Type switch
                 {
-                    case ExifValueType.Byte:
-                    case ExifValueType.Ascii:
-                    case (ExifValueType)6: // SByte
-                    case ExifValueType.Undefined:
-                        count = lengthInBytes;
-                        break;
-                    case ExifValueType.Short:
-                    case ExifValueType.SShort:
-                        count = lengthInBytes / 2;
-                        break;
-                    case ExifValueType.Long:
-                    case ExifValueType.SLong:
-                    case ExifValueType.Float:
-                        count = lengthInBytes / 4;
-                        break;
-                    case ExifValueType.Rational:
-                    case ExifValueType.SRational:
-                    case ExifValueType.Double:
-                        count = lengthInBytes / 8;
-                        break;
-                    default:
-                        throw new InvalidOperationException($"Unsupported { nameof(ExifValueType) }: { entry.Type }.");
-                }
-
+                    ExifValueType.Byte or ExifValueType.Ascii or (ExifValueType)6 or ExifValueType.Undefined => lengthInBytes,
+                    ExifValueType.Short or ExifValueType.SShort => lengthInBytes / 2,
+                    ExifValueType.Long or ExifValueType.SLong or ExifValueType.Float => lengthInBytes / 4,
+                    ExifValueType.Rational or ExifValueType.SRational or ExifValueType.Double => lengthInBytes / 8,
+                    _ => throw new InvalidOperationException($"Unsupported {nameof(ExifValueType)}: {entry.Type}."),
+                };
                 if (ExifValueTypeUtil.ValueFitsInOffsetField(entry.Type, count))
                 {
                     uint packedOffset = 0;
@@ -359,21 +339,12 @@ namespace JpegXLFileTypePlugin.Exif
                 // Remove the existing tags, if present.
                 entries.Remove(ExifPropertyKeys.Interop.InteroperabilityIndex.Path);
                 entries.Remove(ExifPropertyKeys.Interop.InteroperabilityVersion.Path);
-
-                byte[] interoperabilityIndexData;
-
-                switch (exifColorSpace)
+                byte[] interoperabilityIndexData = exifColorSpace switch
                 {
-                    case ExifColorSpace.Srgb:
-                        interoperabilityIndexData = new byte[] { (byte)'R', (byte)'9', (byte)'8', 0 };
-                        break;
-                    case ExifColorSpace.AdobeRgb:
-                        interoperabilityIndexData = new byte[] { (byte)'R', (byte)'0', (byte)'3', 0 };
-                        break;
-                    default:
-                        throw new InvalidOperationException("Unsupported ExifColorSpace value.");
-                }
-
+                    ExifColorSpace.Srgb => new byte[] { (byte)'R', (byte)'9', (byte)'8', 0 },
+                    ExifColorSpace.AdobeRgb => new byte[] { (byte)'R', (byte)'0', (byte)'3', 0 },
+                    _ => throw new InvalidOperationException("Unsupported ExifColorSpace value."),
+                };
                 Dictionary<ushort, ExifValue> interopSection = new()
                 {
                     {
