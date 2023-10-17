@@ -210,9 +210,9 @@ namespace JpegXLFileTypePlugin.Exif
                 uint lengthInBytes = (uint)entry.Data.Count;
                 var count = entry.Type switch
                 {
-                    ExifValueType.Byte or ExifValueType.Ascii or (ExifValueType)6 or ExifValueType.Undefined => lengthInBytes,
+                    ExifValueType.Byte or ExifValueType.Ascii or ExifValueType.SByte or ExifValueType.Undefined => lengthInBytes,
                     ExifValueType.Short or ExifValueType.SShort => lengthInBytes / 2,
-                    ExifValueType.Long or ExifValueType.SLong or ExifValueType.Float => lengthInBytes / 4,
+                    ExifValueType.Long or ExifValueType.SLong or ExifValueType.Float or ExifValueType.Ifd => lengthInBytes / 4,
                     ExifValueType.Rational or ExifValueType.SRational or ExifValueType.Double => lengthInBytes / 8,
                     _ => throw new InvalidOperationException($"Unsupported {nameof(ExifValueType)}: {entry.Type}."),
                 };
