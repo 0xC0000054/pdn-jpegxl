@@ -84,20 +84,13 @@ namespace JpegXLFileTypePlugin
                     }
                 }
 
-                if (iccProfileBytes != null)
-                {
-                    exifColorSpace = ExifColorSpace.Uncalibrated;
-                }
-                else
-                {
-                    ExifPropertyPath iccProfileKey = ExifPropertyKeys.Image.InterColorProfile.Path;
+                ExifPropertyPath iccProfileKey = ExifPropertyKeys.Image.InterColorProfile.Path;
 
-                    if (propertyItems.TryGetValue(iccProfileKey, out ExifValue? iccProfileItem))
-                    {
-                        iccProfileBytes = iccProfileItem.Data.ToArrayEx();
-                        propertyItems.Remove(iccProfileKey);
-                        exifColorSpace = ExifColorSpace.Uncalibrated;
-                    }
+                if (propertyItems.TryGetValue(iccProfileKey, out ExifValue? iccProfileItem))
+                {
+                    iccProfileBytes = iccProfileItem.Data.ToArrayEx();
+                    propertyItems.Remove(iccProfileKey);
+                    exifColorSpace = ExifColorSpace.Uncalibrated;
                 }
 
                 if (iccProfileBytes != null)
