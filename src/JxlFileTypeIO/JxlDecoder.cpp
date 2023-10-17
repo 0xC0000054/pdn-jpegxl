@@ -305,6 +305,23 @@ DecoderStatus DecoderReadImage(
             }
             else if (status == JXL_DEC_COLOR_ENCODING)
             {
+                if (!basicInfo.uses_original_profile)
+                {
+                    // For XYB encoded images we tell libjxl to convert the output image to sRGB.
+                    JxlColorEncoding colorEncoding{};
+                    colorEncoding.color_space = JXL_COLOR_SPACE_RGB;
+                    colorEncoding.white_point = JXL_WHITE_POINT_D65;
+                    colorEncoding.primaries = JXL_PRIMARIES_SRGB;
+                    colorEncoding.transfer_function = JXL_TRANSFER_FUNCTION_SRGB;
+                    colorEncoding.rendering_intent = JXL_RENDERING_INTENT_PERCEPTUAL;
+
+                    if (JxlDecoderSetPreferredColorProfile(dec.get(), &colorEncoding) != JXL_DEC_SUCCESS)
+                    {
+                        SetErrorMessage(errorInfo, "JxlDecoderSetPreferredColorProfile failed.");
+                        return DecoderStatus::DecodeError;
+                    }
+                }
+
                 size_t iccProfileSize = 0;
 
                 if (JxlDecoderGetICCProfileSize(
