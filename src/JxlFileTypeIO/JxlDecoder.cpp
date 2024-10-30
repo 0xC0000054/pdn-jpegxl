@@ -326,7 +326,6 @@ DecoderStatus DecoderReadImage(
 
                 if (JxlDecoderGetICCProfileSize(
                     dec.get(),
-                    &format,
                     JXL_COLOR_PROFILE_TARGET_DATA,
                     &iccProfileSize) == JXL_DEC_SUCCESS)
                 {
@@ -338,7 +337,6 @@ DecoderStatus DecoderReadImage(
                         {
                             if (JxlDecoderGetColorAsICCProfile(
                                 dec.get(),
-                                &format,
                                 JXL_COLOR_PROFILE_TARGET_DATA,
                                 buffer,
                                 iccProfileSize) != JXL_DEC_SUCCESS)
