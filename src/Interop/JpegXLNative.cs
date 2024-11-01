@@ -86,7 +86,7 @@ namespace JpegXLFileTypePlugin.Interop
 
         internal static unsafe void SaveImage(Surface surface,
                                               EncoderOptions options,
-                                              EncoderImageMetadata? metadata,
+                                              EncoderImageMetadata metadata,
                                               ProgressCallback? progressCallback,
                                               Stream output)
         {

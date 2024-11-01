@@ -57,12 +57,12 @@ namespace JpegXLFileTypePlugin
             }
 
             EncoderOptions options = new(quality, lossless, speed);
-            EncoderImageMetadata? metadata = CreateImageMetadata(input);
+            EncoderImageMetadata metadata = CreateImageMetadata(input);
 
             JpegXLNative.SaveImage(scratchSurface, options, metadata, progressCallback, output);
         }
 
-        private static EncoderImageMetadata? CreateImageMetadata(Document input)
+        private static EncoderImageMetadata CreateImageMetadata(Document input)
         {
             byte[]? exifBytes = null;
             byte[]? iccProfileBytes = null;
@@ -113,14 +113,7 @@ namespace JpegXLFileTypePlugin
                 xmpBytes = Encoding.UTF8.GetBytes(xmpPacketAsString);
             }
 
-            EncoderImageMetadata? metadata = null;
-
-            if (exifBytes != null || iccProfileBytes != null || xmpBytes != null)
-            {
-                metadata = new EncoderImageMetadata(exifBytes, iccProfileBytes, xmpBytes);
-            }
-
-            return metadata;
+            return new EncoderImageMetadata(exifBytes, iccProfileBytes, xmpBytes);
         }
 
         private static Dictionary<ExifPropertyPath, ExifValue>? GetExifMetadataFromDocument(Document doc)

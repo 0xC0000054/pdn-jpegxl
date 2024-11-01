@@ -33,7 +33,7 @@ namespace JpegXLFileTypePlugin.Interop
         [UnmanagedCallConv(CallConvs = new System.Type[] { typeof(System.Runtime.CompilerServices.CallConvStdcall) })]
         internal static partial EncoderStatus SaveImage(in BitmapData bitmap,
                                                         in EncoderOptions options,
-                                                        in EncoderImageMetadata? metadata,
+                                                        in EncoderImageMetadata metadata,
                                                         ref ErrorInfo errorInfo,
                                                         [MarshalAs(UnmanagedType.FunctionPtr)] ProgressCallback? progressCallback,
                                                         [MarshalAs(UnmanagedType.FunctionPtr)] WriteDataCallback writeDataCallback);

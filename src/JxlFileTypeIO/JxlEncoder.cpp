@@ -161,7 +161,7 @@ EncoderStatus EncoderWriteImage(
     ProgressProc progressCallback,
     WriteDataProc writeDataCallback)
 {
-    if (!bitmap || !options || !writeDataCallback)
+    if (!bitmap || !options || !metadata || !writeDataCallback)
     {
         return EncoderStatus::NullParameter;
     }
@@ -268,60 +268,57 @@ EncoderStatus EncoderWriteImage(
             return EncoderStatus::UserCancelled;
         }
 
-        if (metadata)
+        if (metadata->iccProfileSize > 0)
         {
-            if (metadata->iccProfileSize > 0)
+            if (JxlEncoderSetICCProfile(
+                enc.get(),
+                metadata->iccProfile,
+                metadata->iccProfileSize) != JXL_ENC_SUCCESS)
             {
-                if (JxlEncoderSetICCProfile(
-                    enc.get(),
-                    metadata->iccProfile,
-                    metadata->iccProfileSize) != JXL_ENC_SUCCESS)
-                {
-                    SetErrorMessage(errorInfo, "JxlEncoderSetICCProfile failed.");
-                    return EncoderStatus::EncodeError;
-                }
+                SetErrorMessage(errorInfo, "JxlEncoderSetICCProfile failed.");
+                return EncoderStatus::EncodeError;
             }
-            else
+        }
+        else
+        {
+            JxlColorEncoding colorEncoding{};
+            bool isGray = outputPixelFormat == OutputPixelFormat::Gray || outputPixelFormat == OutputPixelFormat::GrayAlpha;
+
+            JxlColorEncodingSetToSRGB(&colorEncoding, isGray);
+            colorEncoding.rendering_intent = JXL_RENDERING_INTENT_PERCEPTUAL;
+
+            if (JxlEncoderSetColorEncoding(enc.get(), &colorEncoding) != JXL_ENC_SUCCESS)
             {
-                JxlColorEncoding colorEncoding{};
-                bool isGray = outputPixelFormat == OutputPixelFormat::Gray || outputPixelFormat == OutputPixelFormat::GrayAlpha;
-
-                JxlColorEncodingSetToSRGB(&colorEncoding, isGray);
-                colorEncoding.rendering_intent = JXL_RENDERING_INTENT_PERCEPTUAL;
-
-                if (JxlEncoderSetColorEncoding(enc.get(), &colorEncoding) != JXL_ENC_SUCCESS)
-                {
-                    SetErrorMessage(errorInfo, "JxlEncoderSetColorEncoding failed.");
-                    return EncoderStatus::EncodeError;
-                }
+                SetErrorMessage(errorInfo, "JxlEncoderSetColorEncoding failed.");
+                return EncoderStatus::EncodeError;
             }
+        }
 
-            if (metadata->exifSize > 0)
+        if (metadata->exifSize > 0)
+        {
+            if (JxlEncoderAddBox(
+                enc.get(),
+                "Exif",
+                metadata->exif,
+                metadata->exifSize,
+                JXL_FALSE) != JXL_ENC_SUCCESS)
             {
-                if (JxlEncoderAddBox(
-                    enc.get(),
-                    "Exif",
-                    metadata->exif,
-                    metadata->exifSize,
-                    JXL_FALSE) != JXL_ENC_SUCCESS)
-                {
-                    SetErrorMessage(errorInfo, "JxlEncoderAddBox failed.");
-                    return EncoderStatus::EncodeError;
-                }
+                SetErrorMessage(errorInfo, "JxlEncoderAddBox failed.");
+                return EncoderStatus::EncodeError;
             }
+        }
 
-            if (metadata->xmpSize > 0)
+        if (metadata->xmpSize > 0)
+        {
+            if (JxlEncoderAddBox(
+                enc.get(),
+                "xml ",
+                metadata->xmp,
+                metadata->xmpSize,
+                JXL_FALSE) != JXL_ENC_SUCCESS)
             {
-                if (JxlEncoderAddBox(
-                    enc.get(),
-                    "xml ",
-                    metadata->xmp,
-                    metadata->xmpSize,
-                    JXL_FALSE) != JXL_ENC_SUCCESS)
-                {
-                    SetErrorMessage(errorInfo, "JxlEncoderAddBox failed.");
-                    return EncoderStatus::EncodeError;
-                }
+                SetErrorMessage(errorInfo, "JxlEncoderAddBox failed.");
+                return EncoderStatus::EncodeError;
             }
         }
 
