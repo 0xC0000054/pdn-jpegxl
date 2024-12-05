@@ -134,6 +134,9 @@ csharp_style_var_elsewhere = false:silent
 insert_final_newline = true
 csharp_space_around_binary_operators = before_and_after
 
+# IDE0290: Use primary constructor
+csharp_style_prefer_primary_constructors = false
+
 [*.{cpp,h}]
 indent_size              = 4
 indent_style             = space
