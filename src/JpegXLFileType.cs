@@ -50,8 +50,8 @@ namespace JpegXLFileTypePlugin
 
         public override PropertyCollection OnCreateSavePropertyCollection()
         {
-            List<Property> props = new()
-            {
+            List<Property> props =
+            [
                 new Int32Property(PropertyNames.Quality, 90, 0, 100),
                 new BooleanProperty(PropertyNames.Lossless, false),
                 new Int32Property(PropertyNames.EncoderSpeed, 7, 1, 9),
@@ -59,12 +59,12 @@ namespace JpegXLFileTypePlugin
                 new UriProperty (PropertyNames.GitHubLink, new Uri("https://github.com/0xC0000054/pdn-jpegxl")),
                 new StringProperty(PropertyNames.PluginVersion),
                 new StringProperty(PropertyNames.LibJxlVersion)
-            };
+            ];
 
-            List<PropertyCollectionRule> rules = new()
-            {
+            List<PropertyCollectionRule> rules =
+            [
                 new ReadOnlyBoundToBooleanRule(PropertyNames.Quality, PropertyNames.Lossless, inverse: false)
-            };
+            ];
 
             return new PropertyCollection(props, rules);
         }

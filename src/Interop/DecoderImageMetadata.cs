@@ -31,7 +31,7 @@ namespace JpegXLFileTypePlugin.Interop
         {
             iccProfileBytes = null;
             exifBytes = null;
-            xmlMetadataChunks = new List<byte[]>();
+            xmlMetadataChunks = [];
         }
 
         public ExceptionDispatchInfo? ExceptionInfo { get; private set; }
