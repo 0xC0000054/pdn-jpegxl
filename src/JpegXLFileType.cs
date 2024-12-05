@@ -22,13 +22,15 @@ namespace JpegXLFileTypePlugin
 {
     internal sealed class JpegXLFileType : PropertyBasedFileType
     {
+        private static readonly string[] FileExtensions = [".jxl"];
+
 #pragma warning disable IDE0060 // Remove unused parameter
         public JpegXLFileType(IFileTypeHost host)
 #pragma warning restore IDE0060 // Remove unused parameter
             : base("JPEG XL", new FileTypeOptions
             {
-                LoadExtensions = new string[] { ".jxl" },
-                SaveExtensions = new string[] { ".jxl" },
+                LoadExtensions = FileExtensions,
+                SaveExtensions = FileExtensions,
                 SupportsCancellation = true,
                 SupportsLayers = false
             })
