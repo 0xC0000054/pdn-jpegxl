@@ -28,7 +28,7 @@ namespace
         Rgba
     };
 
-    OutputPixelFormat GetOutputPixelFormat(const BitmapData* bitmap)
+    OutputPixelFormat GetOutputPixelFormat(const BitmapData* bitmap, bool hasICCProfile)
     {
         bool isGray = true;
         bool hasTransparency = false;
@@ -60,7 +60,9 @@ namespace
 
         OutputPixelFormat format;
 
-        if (isGray)
+        // Don't auto-convert images with an ICC profile to gray scale.
+        // The image's profile is RGB, and RGB profiles should not be used with a gray scale image.
+        if (isGray && !hasICCProfile)
         {
             format = hasTransparency ? OutputPixelFormat::GrayAlpha : OutputPixelFormat::Gray;
         }
@@ -173,7 +175,7 @@ EncoderStatus EncoderWriteImage(
             return EncoderStatus::UserCancelled;
         }
 
-        const OutputPixelFormat outputPixelFormat = GetOutputPixelFormat(bitmap);
+        const OutputPixelFormat outputPixelFormat = GetOutputPixelFormat(bitmap, metadata->iccProfileSize > 0);
         const std::vector<uint8_t> outputPixels = CreateJxlImageBuffer(bitmap, outputPixelFormat);
 
         if (!ReportProgress(progressCallback, 5))
