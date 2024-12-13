@@ -19,9 +19,18 @@
 
 namespace
 {
+    enum class JpegXLImageFormat
+    {
+        Gray = 0,
+        GrayAlpha,
+        Rgb,
+        Rgba
+    };
+
     struct ImageOutState
     {
         BitmapData outLayerData;
+        JpegXLImageFormat format;
         uint32_t numberOfChannels;
     };
 
@@ -33,29 +42,30 @@ namespace
         const size_t destStride = static_cast<size_t>(state->outLayerData.stride);
 
         const uint32_t srcChannelCount = state->numberOfChannels;
+        const JpegXLImageFormat format = state->format;
 
         const uint8_t* src = static_cast<const uint8_t*>(pixels);
         ColorBgra* dest = reinterpret_cast<ColorBgra*>(destScan0 + (y * destStride) + (x * sizeof(ColorBgra)));
 
         for (size_t i = 0; i < num_pixels; i++)
         {
-            switch (srcChannelCount)
+            switch (format)
             {
-            case 1: // Gray
+            case JpegXLImageFormat::Gray:
                 dest->r = dest->g = dest->b = src[0];
                 dest->a = 255;
                 break;
-            case 2: // Gray + Alpha
+            case JpegXLImageFormat::GrayAlpha:
                 dest->r = dest->g = dest->b = src[0];
                 dest->a = src[1];
                 break;
-            case 3: // RGB
+            case JpegXLImageFormat::Rgb:
                 dest->r = src[0];
                 dest->g = src[1];
                 dest->b = src[2];
                 dest->a = 255;
                 break;
-            case 4: // RGBA
+            case JpegXLImageFormat::Rgba:
                 dest->r = src[0];
                 dest->g = src[1];
                 dest->b = src[2];
@@ -305,6 +315,15 @@ DecoderStatus DecoderReadImage(
 
                 format.num_channels = colorChannelCount + (hasAlphaChannel ? 1 : 0);
                 imageOutState.numberOfChannels = format.num_channels;
+
+                if (hasAlphaChannel)
+                {
+                    imageOutState.format = colorChannelCount == 1 ? JpegXLImageFormat::GrayAlpha : JpegXLImageFormat::Rgba;
+                }
+                else
+                {
+                    imageOutState.format = colorChannelCount == 1 ? JpegXLImageFormat::Gray : JpegXLImageFormat::Rgb;
+                }
             }
             else if (status == JXL_DEC_COLOR_ENCODING)
             {
