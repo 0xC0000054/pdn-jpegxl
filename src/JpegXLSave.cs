@@ -68,30 +68,32 @@ namespace JpegXLFileTypePlugin
             byte[]? iccProfileBytes = null;
             byte[]? xmpBytes = null;
 
+            ExifColorSpace exifColorSpace = ExifColorSpace.Srgb;
+
+            IColorContext? colorContext = input.GetColorContext();
+
+            if (colorContext != null)
+            {
+                // We do not set an ICC profile for sRGB images as JpegXL can signal that
+                // using its built-in color space encoding, and sRGB is the default for
+                // images without an ICC profile.
+                if (colorContext.Type != ColorContextType.ExifColorSpace
+                    || colorContext.ExifColorSpace != PaintDotNet.Imaging.ExifColorSpace.Srgb)
+                {
+                    iccProfileBytes = colorContext.GetProfileBytes().ToArray();
+
+                    if (iccProfileBytes.Length > 0)
+                    {
+                        exifColorSpace = ExifColorSpace.Uncalibrated;
+                    }
+                }
+            }
+
             Dictionary<ExifPropertyPath, ExifValue>? propertyItems = GetExifMetadataFromDocument(input);
 
             if (propertyItems != null)
             {
-                ExifColorSpace exifColorSpace = ExifColorSpace.Srgb;
-
-                if (propertyItems.TryGetValue(ExifPropertyKeys.Photo.ColorSpace.Path, out ExifValue? value))
-                {
-                    propertyItems.Remove(ExifPropertyKeys.Photo.ColorSpace.Path);
-
-                    if (MetadataHelpers.TryDecodeShort(value, out ushort colorSpace))
-                    {
-                        exifColorSpace = (ExifColorSpace)colorSpace;
-                    }
-                }
-
-                ExifPropertyPath iccProfileKey = ExifPropertyKeys.Image.InterColorProfile.Path;
-
-                if (propertyItems.TryGetValue(iccProfileKey, out ExifValue? iccProfileItem))
-                {
-                    iccProfileBytes = iccProfileItem.Data.ToArrayEx();
-                    propertyItems.Remove(iccProfileKey);
-                    exifColorSpace = ExifColorSpace.Uncalibrated;
-                }
+                propertyItems.Remove(ExifPropertyKeys.Image.InterColorProfile.Path);
 
                 if (iccProfileBytes != null)
                 {
