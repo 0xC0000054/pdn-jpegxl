@@ -78,6 +78,18 @@ namespace JpegXLFileTypePlugin.Interop
             };
         }
 
+        private bool IccProfileMatchesImageType(ReadOnlySpan<byte> profileBytes)
+        {
+            ICCProfile.ProfileHeader profileHeader = new(profileBytes);
+
+            return Format switch
+            {
+                JpegXLImageFormat.Gray => profileHeader.ColorSpace == ICCProfile.ProfileColorSpace.Gray,
+                JpegXLImageFormat.Rgb => profileHeader.ColorSpace == ICCProfile.ProfileColorSpace.Rgb,
+                _ => false,
+            };
+        }
+
         private void SetBasicInfo(int canvasWidth, int canvasHeight, JpegXLImageFormat format, bool hasTransparency)
         {
             Width = canvasWidth;
@@ -93,6 +105,11 @@ namespace JpegXLFileTypePlugin.Interop
                 ReadOnlySpan<byte> profileBytes = new(data, checked((int)dataLength));
 
                 colorContext = imagingFactory!.CreateColorContext(profileBytes);
+
+                if (!IccProfileMatchesImageType(profileBytes))
+                {
+                    DisposableUtil.Free(ref colorContext);
+                }
             }
             catch (Exception ex)
             {
