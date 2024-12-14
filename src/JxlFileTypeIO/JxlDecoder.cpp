@@ -19,83 +19,57 @@
 
 namespace
 {
-    enum class JpegXLImageFormat
+    enum class SetProfileFromEncodingStatus
     {
-        Gray = 0,
-        GrayAlpha,
-        Rgb,
-        Rgba
+        Ok,
+        Error,
+        UnsupportedColorEncoding
     };
 
-    struct ImageOutState
+    SetProfileFromEncodingStatus SetKnownColorProfileFromEncoding(DecoderCallbacks* callbacks, KnownColorProfile profile)
     {
-        BitmapData outLayerData;
-        JpegXLImageFormat format;
-        uint32_t numberOfChannels;
-    };
-
-    void ImageOutCallback(void* opaque, size_t x, size_t y, size_t num_pixels, const void* pixels)
-    {
-        ImageOutState* state = static_cast<ImageOutState*>(opaque);
-
-        uint8_t* destScan0 = state->outLayerData.scan0;
-        const size_t destStride = static_cast<size_t>(state->outLayerData.stride);
-
-        const uint32_t srcChannelCount = state->numberOfChannels;
-        const JpegXLImageFormat format = state->format;
-
-        const uint8_t* src = static_cast<const uint8_t*>(pixels);
-        ColorBgra* dest = reinterpret_cast<ColorBgra*>(destScan0 + (y * destStride) + (x * sizeof(ColorBgra)));
-
-        for (size_t i = 0; i < num_pixels; i++)
-        {
-            switch (format)
-            {
-            case JpegXLImageFormat::Gray:
-                dest->r = dest->g = dest->b = src[0];
-                dest->a = 255;
-                break;
-            case JpegXLImageFormat::GrayAlpha:
-                dest->r = dest->g = dest->b = src[0];
-                dest->a = src[1];
-                break;
-            case JpegXLImageFormat::Rgb:
-                dest->r = src[0];
-                dest->g = src[1];
-                dest->b = src[2];
-                dest->a = 255;
-                break;
-            case JpegXLImageFormat::Rgba:
-                dest->r = src[0];
-                dest->g = src[1];
-                dest->b = src[2];
-                dest->a = src[3];
-                break;
-            }
-
-            src += srcChannelCount;
-            dest++;
-        }
+        return callbacks->setKnownColorProfile(profile)
+            ? SetProfileFromEncodingStatus::Ok
+            : SetProfileFromEncodingStatus::Error;
     }
 
-    DecoderStatus SetMetadata(
+    SetProfileFromEncodingStatus SetProfileFromColorEncoding(
         DecoderCallbacks* callbacks,
-        MetadataType type,
-        const uint8_t* data,
-        size_t dataSize)
+        const JxlColorEncoding& colorEncoding)
     {
-        void* outBuffer = callbacks->createMetadataBuffer(type, dataSize);
-
-        if (outBuffer)
+        if (colorEncoding.white_point == JXL_WHITE_POINT_D65)
         {
-            memcpy_s(outBuffer, dataSize, data, dataSize);
-        }
-        else
-        {
-            return DecoderStatus::CreateMetadataBufferError;
+            if (colorEncoding.transfer_function == JXL_TRANSFER_FUNCTION_LINEAR)
+            {
+                if (colorEncoding.color_space == JXL_COLOR_SPACE_RGB)
+                {
+                    if (colorEncoding.primaries == JXL_PRIMARIES_SRGB)
+                    {
+                        return SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::LinearSrgb);
+                    }
+                }
+                else if (colorEncoding.color_space == JXL_COLOR_SPACE_GRAY)
+                {
+                    return SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::LinearGray);
+                }
+            }
+            else if (colorEncoding.transfer_function == JXL_TRANSFER_FUNCTION_SRGB)
+            {
+                if (colorEncoding.color_space == JXL_COLOR_SPACE_RGB)
+                {
+                    if (colorEncoding.primaries == JXL_PRIMARIES_SRGB)
+                    {
+                        return SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::Srgb);
+                    }
+                }
+                else if (colorEncoding.color_space == JXL_COLOR_SPACE_GRAY)
+                {
+                    return SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::GraySrgbTRC);
+                }
+            }
         }
 
-        return DecoderStatus::Ok;
+        return SetProfileFromEncodingStatus::UnsupportedColorEncoding;
     }
 }
 
@@ -120,6 +94,7 @@ DecoderStatus DecoderReadImage(
             dec.get(),
             JXL_DEC_BASIC_INFO |
             JXL_DEC_COLOR_ENCODING |
+            JXL_DEC_FRAME |
             JXL_DEC_FULL_IMAGE |
             JXL_DEC_BOX |
             JXL_DEC_BOX_COMPLETE) != JXL_DEC_SUCCESS)
@@ -156,7 +131,8 @@ DecoderStatus DecoderReadImage(
         bool firstFrameDecoded = false;
         JxlBasicInfo basicInfo{};
         JxlPixelFormat format{ 4, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0 };
-        ImageOutState imageOutState{};
+        std::vector<uint8_t> imageOutBuffer;
+        std::vector<uint8_t> iccProfileBuffer;
 
         std::vector<uint8_t> boxMetadataBuffer;
         size_t boxMetadataBufferOffset = 0;
@@ -164,6 +140,8 @@ DecoderStatus DecoderReadImage(
         bool foundExifBox = false;
         bool readingExifBox = false;
         bool readingXmpBox = false;
+        DecoderImageFormat decoderImageFormat{};
+        std::vector<char> layerNameBuffer;
 
         while (true)
         {
@@ -251,15 +229,11 @@ DecoderStatus DecoderReadImage(
 
                     size_t remaining = JxlDecoderReleaseBoxBuffer(dec.get());
 
-                    DecoderStatus error = SetMetadata(
-                        callbacks,
-                        MetadataType::Exif,
+                    if (!callbacks->setExif(
                         boxMetadataBuffer.data(),
-                        boxMetadataBuffer.size() - remaining);
-
-                    if (error != DecoderStatus::Ok)
+                        boxMetadataBuffer.size() - remaining))
                     {
-                        return error;
+                        return DecoderStatus::CreateMetadataError;
                     }
                 }
                 else if (readingXmpBox)
@@ -268,15 +242,11 @@ DecoderStatus DecoderReadImage(
 
                     size_t remaining = JxlDecoderReleaseBoxBuffer(dec.get());
 
-                    DecoderStatus error = SetMetadata(
-                        callbacks,
-                        MetadataType::Xmp,
+                    if (!callbacks->setXmp(
                         boxMetadataBuffer.data(),
-                        boxMetadataBuffer.size() - remaining);
-
-                    if (error != DecoderStatus::Ok)
+                        boxMetadataBuffer.size() - remaining))
                     {
-                        return error;
+                        return DecoderStatus::CreateMetadataError;
                     }
                 }
             }
@@ -297,7 +267,7 @@ DecoderStatus DecoderReadImage(
                 const uint32_t height = basicInfo.ysize;
                 const uint32_t colorChannelCount = basicInfo.num_color_channels;
                 const uint32_t extraChannelCount = basicInfo.num_extra_channels;
-                const bool hasAlphaChannel = basicInfo.alpha_bits != 0;
+                const bool hasTransparency = basicInfo.alpha_bits != 0;
 
                 if (width > static_cast<uint32_t>(std::numeric_limits<int32_t>::max()) ||
                     height > static_cast<uint32_t>(std::numeric_limits<int32_t>::max()))
@@ -307,31 +277,31 @@ DecoderStatus DecoderReadImage(
 
                 if (colorChannelCount != 1 && colorChannelCount != 3 ||
                     extraChannelCount > 1 ||
-                    extraChannelCount == 1 && !hasAlphaChannel)
+                    extraChannelCount == 1 && !hasTransparency)
                 {
                     // The format is not gray or RGB with an optional alpha channel.
                     return DecoderStatus::UnsupportedChannelFormat;
                 }
 
-                format.num_channels = colorChannelCount + (hasAlphaChannel ? 1 : 0);
-                imageOutState.numberOfChannels = format.num_channels;
+                format.num_channels = colorChannelCount + (hasTransparency ? 1 : 0);
+                decoderImageFormat = colorChannelCount == 1 ? DecoderImageFormat::Gray : DecoderImageFormat::Rgb;
 
-                if (hasAlphaChannel)
-                {
-                    imageOutState.format = colorChannelCount == 1 ? JpegXLImageFormat::GrayAlpha : JpegXLImageFormat::Rgba;
-                }
-                else
-                {
-                    imageOutState.format = colorChannelCount == 1 ? JpegXLImageFormat::Gray : JpegXLImageFormat::Rgb;
-                }
+                callbacks->setBasicInfo(width, height, decoderImageFormat, hasTransparency);
             }
             else if (status == JXL_DEC_COLOR_ENCODING)
             {
                 if (!basicInfo.uses_original_profile)
                 {
-                    // For XYB encoded images we tell libjxl to convert the output image to sRGB.
+                    // For XYB encoded images we tell libjxl to convert the output image to sRGB or sGray.
                     JxlColorEncoding colorEncoding{};
-                    colorEncoding.color_space = JXL_COLOR_SPACE_RGB;
+                    if (decoderImageFormat == DecoderImageFormat::Gray)
+                    {
+                        colorEncoding.color_space = JXL_COLOR_SPACE_GRAY;
+                    }
+                    else
+                    {
+                        colorEncoding.color_space = JXL_COLOR_SPACE_RGB;
+                    }
                     colorEncoding.white_point = JXL_WHITE_POINT_D65;
                     colorEncoding.primaries = JXL_PRIMARIES_SRGB;
                     colorEncoding.transfer_function = JXL_TRANSFER_FUNCTION_SRGB;
@@ -344,36 +314,56 @@ DecoderStatus DecoderReadImage(
                     }
                 }
 
-                size_t iccProfileSize = 0;
+                SetProfileFromEncodingStatus encodedProfileStatus = SetProfileFromEncodingStatus::UnsupportedColorEncoding;
 
-                if (JxlDecoderGetICCProfileSize(
+                JxlColorEncoding colorEncoding{};
+
+                if (JxlDecoderGetColorAsEncodedProfile(
                     dec.get(),
                     JXL_COLOR_PROFILE_TARGET_DATA,
-                    &iccProfileSize) == JXL_DEC_SUCCESS)
+                    &colorEncoding) == JXL_DEC_SUCCESS)
                 {
-                    if (iccProfileSize > 0)
-                    {
-                        uint8_t* buffer = callbacks->createMetadataBuffer(MetadataType::IccProfile, iccProfileSize);
+                    encodedProfileStatus = SetProfileFromColorEncoding(callbacks, colorEncoding);
 
-                        if (buffer)
+                    if (encodedProfileStatus == SetProfileFromEncodingStatus::Error)
+                    {
+                        return DecoderStatus::CreateMetadataError;
+                    }
+                }
+
+                if (encodedProfileStatus == SetProfileFromEncodingStatus::UnsupportedColorEncoding)
+                {
+                    size_t iccProfileSize = 0;
+
+                    if (JxlDecoderGetICCProfileSize(
+                        dec.get(),
+                        JXL_COLOR_PROFILE_TARGET_DATA,
+                        &iccProfileSize) == JXL_DEC_SUCCESS)
+                    {
+                        if (iccProfileSize > 0)
                         {
+                            iccProfileBuffer.resize(iccProfileSize);
+
                             if (JxlDecoderGetColorAsICCProfile(
                                 dec.get(),
                                 JXL_COLOR_PROFILE_TARGET_DATA,
-                                buffer,
+                                iccProfileBuffer.data(),
                                 iccProfileSize) != JXL_DEC_SUCCESS)
                             {
                                 return DecoderStatus::MetadataError;
                             }
-                        }
-                        else
-                        {
-                            return DecoderStatus::CreateMetadataBufferError;
+
+                            if (!callbacks->setIccProfile(
+                                iccProfileBuffer.data(),
+                                iccProfileBuffer.size()))
+                            {
+                                return DecoderStatus::CreateMetadataError;
+                            }
                         }
                     }
                 }
             }
-            else if (status == JXL_DEC_NEED_IMAGE_OUT_BUFFER)
+            else if (status == JXL_DEC_FRAME)
             {
                 if (firstFrameDecoded)
                 {
@@ -388,7 +378,6 @@ DecoderStatus DecoderReadImage(
                     return DecoderStatus::DecodeError;
                 }
 
-                std::vector<char> layerNameBuffer;
                 char* layerNamePtr = nullptr;
                 uint32_t layerNameLengthInBytes = 0;
 
@@ -399,28 +388,28 @@ DecoderStatus DecoderReadImage(
                     if (JxlDecoderGetFrameName(
                         dec.get(),
                         layerNameBuffer.data(),
-                        layerNameBuffer.size()) == JXL_DEC_SUCCESS)
+                        layerNameBuffer.size()) != JXL_DEC_SUCCESS)
                     {
-                        layerNamePtr = layerNameBuffer.data();
-                        layerNameLengthInBytes = frameHeader.name_length;
+                        layerNameBuffer.clear();
                     }
                 }
-
-                if (!callbacks->createLayer(
-                    static_cast<int32_t>(basicInfo.xsize),
-                    static_cast<int32_t>(basicInfo.ysize),
-                    layerNamePtr,
-                    layerNameLengthInBytes,
-                    &imageOutState.outLayerData))
+                else
                 {
-                    return DecoderStatus::CreateLayerError;
+                    layerNameBuffer.clear();
+                }
+            }
+            else if (status == JXL_DEC_NEED_IMAGE_OUT_BUFFER)
+            {
+                if (imageOutBuffer.size() == 0)
+                {
+                    imageOutBuffer.resize(static_cast<size_t>(basicInfo.xsize) * basicInfo.ysize * format.num_channels);
                 }
 
-                if (JxlDecoderSetImageOutCallback(
+                if (JxlDecoderSetImageOutBuffer(
                     dec.get(),
                     &format,
-                    &ImageOutCallback,
-                    &imageOutState) != JXL_DEC_SUCCESS)
+                    imageOutBuffer.data(),
+                    imageOutBuffer.size()) != JXL_DEC_SUCCESS)
                 {
                     SetErrorMessage(errorInfo, "JxlDecoderSetImageOutCallback failed.");
                     return DecoderStatus::DecodeError;
@@ -431,6 +420,23 @@ DecoderStatus DecoderReadImage(
                 if (!firstFrameDecoded)
                 {
                     firstFrameDecoded = true;
+
+                    char* layerNamePtr = nullptr;
+                    size_t layerNameLengthInBytes = 0;
+
+                    if (layerNameBuffer.size() > 0)
+                    {
+                        layerNamePtr = layerNameBuffer.data();
+                        layerNameLengthInBytes = layerNameBuffer.size();
+                    }
+
+                    if (!callbacks->setLayerData(
+                        imageOutBuffer.data(),
+                        layerNamePtr,
+                        layerNameLengthInBytes))
+                    {
+                        return DecoderStatus::CreateLayerError;
+                    }
                 }
                 else
                 {

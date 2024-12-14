@@ -45,18 +45,15 @@ namespace JpegXLFileTypePlugin.Interop
         }
 
         internal static unsafe void LoadImage(byte[] imageData,
-                                              DecoderLayerData layerData,
-                                              DecoderImageMetadata imageMetadata)
+                                              DecoderImage decoderImage)
         {
             ArgumentNullException.ThrowIfNull(imageData);
-            ArgumentNullException.ThrowIfNull(layerData);
-            ArgumentNullException.ThrowIfNull(imageMetadata);
+            ArgumentNullException.ThrowIfNull(decoderImage);
 
             DecoderStatus status;
             ErrorInfo errorInfo = new();
 
-            DecoderCallbacks callbacks = new(layerData.CreateLayer,
-                                             imageMetadata.CreateMetadataBufferCallback);
+            DecoderCallbacks callbacks = decoderImage.GetDecoderCallbacks();
 
             fixed (byte* data = imageData)
             {
@@ -80,7 +77,7 @@ namespace JpegXLFileTypePlugin.Interop
 
             if (status != DecoderStatus.Ok)
             {
-                HandleDecoderError(status, layerData, imageMetadata, errorInfo);
+                HandleDecoderError(status, decoderImage, errorInfo);
             }
         }
 
@@ -130,8 +127,7 @@ namespace JpegXLFileTypePlugin.Interop
         }
 
         private static unsafe void HandleDecoderError(DecoderStatus status,
-                                                      DecoderLayerData layerData,
-                                                      DecoderImageMetadata imageMetadata,
+                                                      DecoderImage decoderImageInterop,
                                                       ErrorInfo errorInfo)
         {
             if (status == DecoderStatus.DecodeError)
@@ -147,9 +143,9 @@ namespace JpegXLFileTypePlugin.Interop
                     throw new FormatException(message);
                 }
             }
-            else if (status == DecoderStatus.CreateLayerError)
+            else if (status == DecoderStatus.CreateLayerError || status == DecoderStatus.CreateMetadataError)
             {
-                ExceptionDispatchInfo? info = layerData.ExceptionInfo;
+                ExceptionDispatchInfo? info = decoderImageInterop.ExceptionInfo;
 
                 if (info != null)
                 {
@@ -157,20 +153,14 @@ namespace JpegXLFileTypePlugin.Interop
                 }
                 else
                 {
-                    throw new FormatException("An unspecified error occurred when creating the image layer.");
-                }
-            }
-            else if (status == DecoderStatus.CreateMetadataBufferError)
-            {
-                ExceptionDispatchInfo? info = imageMetadata.ExceptionInfo;
-
-                if (info != null)
-                {
-                    info.Throw();
-                }
-                else
-                {
-                    throw new FormatException("An unspecified error occurred when creating the image metadata buffer.");
+                    if (status == DecoderStatus.CreateLayerError)
+                    {
+                        throw new FormatException("An unspecified error occurred when creating the image layer.");
+                    }
+                    else
+                    {
+                        throw new FormatException("An unspecified error occurred when creating the image metadata.");
+                    }
                 }
             }
             else

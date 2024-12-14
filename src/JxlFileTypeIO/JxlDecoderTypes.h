@@ -25,25 +25,40 @@ enum class DecoderStatus : int32_t
     ImageDimensionExceedsInt32,
     UnsupportedChannelFormat,
     CreateLayerError,
-    CreateMetadataBufferError,
+    CreateMetadataError,
     DecodeError,
     MetadataError
 };
 
-// Creates a layer and populates the outLayerData parameter with the layer information.
-// Returns true if successful, or false if an error occurred when creating the layer.
-typedef bool(__stdcall* DecoderCreateLayerCallback)(
+enum class DecoderImageFormat : int32_t
+{
+    Gray = 0,
+    Rgb
+};
+
+enum class KnownColorProfile : int32_t
+{
+    Srgb = 0,
+    LinearSrgb,
+    LinearGray,
+    GraySrgbTRC,
+};
+
+typedef void(__stdcall* DecoderSetBasicInfo)(
     int32_t width,
     int32_t height,
-    char* name,
-    uint32_t nameLength,
-    BitmapData* outLayerData);
-// Creates a buffer to store the specified meta data, and returns a pointer to it.
-// Returns a pointer to the allocated data buffer, or NULL if an error occurred.
-typedef uint8_t*(__stdcall* DecoderCreateMetadataBufferCallback)(MetadataType type, size_t bufferSize);
+    DecoderImageFormat format,
+    bool hasTransparency);
+typedef bool(__stdcall* DecoderSetMetadata)(uint8_t* data, size_t length);
+typedef bool(__stdcall* DecoderSetKnownColorProfile)(KnownColorProfile profile);
+typedef bool(__stdcall* DecoderSetLayerData)(uint8_t* pixels, char* name, size_t nameLength);
 
 struct DecoderCallbacks
 {
-    DecoderCreateLayerCallback createLayer;
-    DecoderCreateMetadataBufferCallback createMetadataBuffer;
+    DecoderSetBasicInfo setBasicInfo;
+    DecoderSetMetadata setIccProfile;
+    DecoderSetKnownColorProfile setKnownColorProfile;
+    DecoderSetMetadata setExif;
+    DecoderSetMetadata setXmp;
+    DecoderSetLayerData setLayerData;
 };

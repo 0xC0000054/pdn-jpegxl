@@ -10,25 +10,36 @@
 //
 ////////////////////////////////////////////////////////////////////////
 
-using System;
 using System.Runtime.InteropServices;
 
 namespace JpegXLFileTypePlugin.Interop
 {
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    internal delegate void SetBasicInfoDelegate(int canvasWidth,
+                                                int canvasHeight,
+                                                JpegXLImageFormat format,
+                                                [MarshalAs(UnmanagedType.U1) ]bool hasTransparency);
+
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal unsafe delegate bool SetMetadataDelegate(byte* data, nuint length);
+
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal unsafe delegate bool SetKnownColorProfileDelegate(KnownColorProfile profile);
+
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal unsafe delegate bool SetLayerDataDelegate(byte* pixels, byte* name, nuint nameLength);
+
     [StructLayout(LayoutKind.Sequential)]
-    internal readonly struct DecoderCallbacks
+    internal struct DecoderCallbacks
     {
-        public readonly nint createLayer;
-        public readonly nint createMetadataBuffer;
-
-        public DecoderCallbacks(DecoderCreateLayerCallback createLayer,
-                                DecoderCreateMetadataBufferCallback createMetadataBuffer)
-        {
-            ArgumentNullException.ThrowIfNull(createLayer);
-            ArgumentNullException.ThrowIfNull(createMetadataBuffer);
-
-            this.createLayer = Marshal.GetFunctionPointerForDelegate(createLayer);
-            this.createMetadataBuffer = Marshal.GetFunctionPointerForDelegate(createMetadataBuffer);
-        }
+        public nint setBasicInfo;
+        public nint setIccProfile;
+        public nint setKnownColorProfile;
+        public nint setExif;
+        public nint setXmp;
+        public nint setLayerData;
     }
 }

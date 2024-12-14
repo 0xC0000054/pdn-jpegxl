@@ -25,33 +25,25 @@ namespace JpegXLFileTypePlugin.Exif
         /// <summary>
         /// Parses the EXIF data into a collection of properties.
         /// </summary>
-        /// <param name="exifBytes">The EXIF bytes.</param>
+        /// <param name="stream">The EXIF bytes.</param>
         /// <returns>
         /// A collection containing the EXIF properties.
         /// </returns>
-        /// <exception cref="ArgumentNullException"><paramref name="exifBytes"/> is null.</exception>
-        internal static ExifValueCollection? Parse(byte[] exifBytes)
+        /// <exception cref="ArgumentNullException"><paramref name="stream"/> is null.</exception>
+        internal static ExifValueCollection? Parse(Stream stream)
         {
-            if (exifBytes == null)
-            {
-                throw new ArgumentNullException(nameof(exifBytes));
-            }
+            ArgumentNullException.ThrowIfNull(stream);
 
             ExifValueCollection? exifValues = null;
 
-            MemoryStream? stream = null;
             try
             {
-                stream = new MemoryStream(exifBytes);
-
                 Endianess? byteOrder = TryDetectTiffByteOrder(stream);
 
                 if (byteOrder.HasValue)
                 {
-                    using (EndianBinaryReader reader = new(stream, byteOrder.Value))
+                    using (EndianBinaryReader reader = new(stream, byteOrder.Value, true))
                     {
-                        stream = null;
-
                         ushort signature = reader.ReadUInt16();
 
                         if (signature == TiffConstants.Signature)
@@ -69,10 +61,6 @@ namespace JpegXLFileTypePlugin.Exif
             {
                 // The EXIF data is corrupt, ignore it.
                 exifValues = null;
-            }
-            finally
-            {
-                stream?.Dispose();
             }
 
             return exifValues;

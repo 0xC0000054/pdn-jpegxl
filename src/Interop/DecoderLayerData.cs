@@ -11,79 +11,67 @@
 ////////////////////////////////////////////////////////////////////////
 
 using PaintDotNet;
-using System;
-using System.Runtime.ExceptionServices;
+using PaintDotNet.Imaging;
+using System.ComponentModel;
 using System.Text;
 
 namespace JpegXLFileTypePlugin.Interop
 {
     internal sealed class DecoderLayerData : Disposable
     {
-        public DecoderLayerData()
+        private IBitmap? color;
+        private IBitmap<ColorAlpha8>? transparency;
+
+        public unsafe DecoderLayerData(
+            int width,
+            int height,
+            JpegXLImageFormat imageFormat,
+            bool hasTransparency,
+            IImagingFactory imagingFactory,
+            byte* name,
+            nuint nameLength)
         {
-            Layer = null;
-            OwnsLayer = true;
-        }
-
-        public ExceptionDispatchInfo? ExceptionInfo { get; private set; }
-
-        public BitmapLayer? Layer { get; private set; }
-
-        public bool OwnsLayer { get; set; }
-
-        public unsafe bool CreateLayer(int width,
-                                       int height,
-                                       sbyte* name,
-                                       uint nameLengthInBytes,
-                                       BitmapData* outLayerData)
-        {
-            try
+            var colorPixelFormat = imageFormat switch
             {
-                string layerName = string.Empty;
+                JpegXLImageFormat.Gray => PixelFormats.Gray8,
+                JpegXLImageFormat.Rgb => PixelFormats.Rgb24,
+                _ => throw new InvalidEnumArgumentException(nameof(imageFormat), (int)imageFormat, typeof(JpegXLImageFormat)),
+            };
+            color = imagingFactory.CreateBitmap(width, height, colorPixelFormat);
 
-                if (name != null && nameLengthInBytes > 0 && nameLengthInBytes <= int.MaxValue)
-                {
-                    layerName = Encoding.UTF8.GetString((byte*)name, (int)nameLengthInBytes);
-                }
-
-                if (string.IsNullOrWhiteSpace(layerName))
-                {
-                    Layer = PaintDotNet.Layer.CreateBackgroundLayer(width, height);
-                }
-                else
-                {
-                    Layer = new BitmapLayer(width, height)
-                    {
-                        Name = layerName
-                    };
-                }
-
-                outLayerData->scan0 = (byte*)Layer.Surface.Scan0.VoidStar;
-                outLayerData->width = (uint)width;
-                outLayerData->height = (uint)height;
-                outLayerData->stride = (uint)Layer.Surface.Stride;
-            }
-            catch (Exception ex)
+            if (hasTransparency)
             {
-                ExceptionInfo = ExceptionDispatchInfo.Capture(ex);
-                return false;
+                transparency = imagingFactory.CreateBitmap<ColorAlpha8>(width, height);
             }
 
-            return true;
+            if (nameLength > 0 && nameLength < int.MaxValue)
+            {
+                Name = Encoding.UTF8.GetString(name, (int)nameLength);
+            }
+            else
+            {
+                Name = string.Empty;
+            }
         }
+
+        public IBitmap Color
+        {
+            get => color!;
+        }
+
+        public IBitmap<ColorAlpha8>? Transparency
+        {
+            get => transparency;
+        }
+
+        public string Name { get; set; }
 
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
-                if (Layer != null)
-                {
-                    if (OwnsLayer)
-                    {
-                        Layer.Dispose();
-                    }
-                    Layer = null;
-                }
+                DisposableUtil.Free(ref color);
+                DisposableUtil.Free(ref transparency);
             }
 
             base.Dispose(disposing);

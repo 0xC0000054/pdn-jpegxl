@@ -12,19 +12,11 @@
 
 namespace JpegXLFileTypePlugin.Interop
 {
-    internal enum DecoderStatus : int
+    internal enum KnownColorProfile : int
     {
-        Ok,
-        NullParameter,
-        InvalidParameter,
-        OutOfMemory,
-        HasAnimation,
-        HasMultipleFrames,
-        ImageDimensionExceedsInt32,
-        UnsupportedChannelFormat,
-        CreateLayerError,
-        CreateMetadataError,
-        DecodeError,
-        MetadataError
+        Srgb = 0,
+        LinearSrgb,
+        LinearGray,
+        GraySrgbTRC,
     }
 }
