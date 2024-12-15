@@ -35,6 +35,7 @@ namespace JpegXLFileTypePlugin.Interop
             {
                 JpegXLImageFormat.Gray => PixelFormats.Gray8,
                 JpegXLImageFormat.Rgb => PixelFormats.Rgb24,
+                JpegXLImageFormat.Cmyk => PixelFormats.Cmyk32,
                 _ => throw new InvalidEnumArgumentException(nameof(imageFormat), (int)imageFormat, typeof(JpegXLImageFormat)),
             };
             color = imagingFactory.CreateBitmap(width, height, colorPixelFormat);

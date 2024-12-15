@@ -118,6 +118,15 @@ namespace JpegXLFileTypePlugin
                     doc.SetColorContext(colorContext);
                 }
             }
+            else if (format == JpegXLImageFormat.Cmyk)
+            {
+                // https://discord.com/channels/143867839282020352/960223751599976479/1167941100976222360
+                // Clinton Ingram (saucecontrol) recommends using Adobe RGB for CMYK data that is converted to RGB.
+                using (IColorContext colorContext = imagingFactory.CreateColorContext(PaintDotNet.Imaging.ExifColorSpace.AdobeRgb))
+                {
+                    doc.SetColorContext(colorContext);
+                }
+            }
         }
 
         private static unsafe void SetLayerColorDataFromConvertedImage(IBitmap color,
@@ -128,7 +137,16 @@ namespace JpegXLFileTypePlugin
         {
             if (sourceColorContext != null)
             {
-                using (IColorContext dstColorContext = imagingFactory.CreateColorContext(PaintDotNet.Direct2D1.DeviceColorSpace.Srgb))
+                PaintDotNet.Imaging.ExifColorSpace dstColorSpace = PaintDotNet.Imaging.ExifColorSpace.Srgb;
+
+                if (format == JpegXLImageFormat.Cmyk)
+                {
+                    // https://discord.com/channels/143867839282020352/960223751599976479/1167941100976222360
+                    // Clinton Ingram (saucecontrol) recommends using Adobe RGB for CMYK data that is converted to RGB.
+                    dstColorSpace = PaintDotNet.Imaging.ExifColorSpace.AdobeRgb;
+                }
+
+                using (IColorContext dstColorContext = imagingFactory.CreateColorContext(dstColorSpace))
                 using (IBitmapSource<ColorRgb24> convertedBitmapSource = imagingFactory.CreateColorTransformedBitmap<ColorRgb24>(color,
                                                                                                                                  sourceColorContext,
                                                                                                                                  dstColorContext))
@@ -144,6 +162,10 @@ namespace JpegXLFileTypePlugin
                 if (format == JpegXLImageFormat.Gray)
                 {
                     SetLayerColorDataFromGrayImage(color, surface);
+                }
+                else if (format == JpegXLImageFormat.Cmyk)
+                {
+                    throw new FormatException("A CMYK image must have a valid ICC profile.");
                 }
             }
         }

@@ -71,6 +71,113 @@ namespace
 
         return SetProfileFromEncodingStatus::UnsupportedColorEncoding;
     }
+
+    bool ExtraChannelsAreSupported(
+        const JxlDecoder* dec,
+        const JxlBasicInfo& info,
+        size_t& cmykBlackChannelIndex)
+    {
+        cmykBlackChannelIndex = std::numeric_limits<size_t>::max();
+
+        const bool hasTransparency = info.alpha_bits != 0;
+        const uint32_t extraChannelCount = info.num_extra_channels;
+        bool foundFirstAlphaChannel = false;
+
+        for (size_t i = 0; i < extraChannelCount; i++)
+        {
+            JxlExtraChannelInfo extraChannelInfo{};
+
+            if (JxlDecoderGetExtraChannelInfo(dec, i, &extraChannelInfo) != JXL_DEC_SUCCESS)
+            {
+                break;
+            }
+
+            if (extraChannelInfo.type == JXL_CHANNEL_BLACK)
+            {
+                if (cmykBlackChannelIndex == std::numeric_limits<size_t>::max())
+                {
+                    cmykBlackChannelIndex = i;
+                }
+                else
+                {
+                    // Duplicate channel.
+                    return false;
+                }
+            }
+            else if (extraChannelInfo.type == JXL_CHANNEL_ALPHA)
+            {
+                if (hasTransparency && !foundFirstAlphaChannel)
+                {
+                    foundFirstAlphaChannel = true;
+                }
+                else
+                {
+                    // Auxiliary alpha channel.
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    bool SetCmykImageData(
+        DecoderCallbacks* callbacks,
+        size_t width,
+        size_t height,
+        bool hasTransparency,
+        const std::vector<uint8_t>& cmya,
+        const std::vector<uint8_t>& key,
+        char* layerName,
+        size_t layerNameLengthInBytes)
+    {
+        const size_t transparencyChannelCount = hasTransparency ? 1 : 0;
+        const size_t cmyaChannelCount = 3 + transparencyChannelCount;
+        const size_t totalChannelCount = 4 + transparencyChannelCount;
+
+        std::vector<uint8_t> output(width * height * totalChannelCount);
+
+        uint8_t* const outputScan0 = output.data();
+        const uint8_t* cmyaScan0 = cmya.data();
+        const uint8_t* keyScan0 = key.data();
+        const size_t outputStride = width * totalChannelCount;
+        const size_t cmyaStride = width * cmyaChannelCount;
+        const size_t keyStride = width;
+
+        for (size_t y = 0; y < height; y++)
+        {
+            const uint8_t* cmya = cmyaScan0 + (y * cmyaStride);
+            const uint8_t* key = keyScan0 + (y * keyStride);
+            uint8_t* dst = outputScan0 + (y * outputStride);
+
+            for (size_t x = 0; x < width; x++)
+            {
+                // Jpeg XL stores CMYK images with 0 representing black/full ink.
+                // https://discord.com/channels/794206087879852103/804324493420920833/1317698217273458738
+                //
+                // "The K channel of a CMYK image. If present, a CMYK ICC profile is also present,
+                // and the RGB samples are to be interpreted as CMY, where 0 denotes full ink."
+                //
+                // WIC requires that 0 is white/no ink, so we have to invert the CMYK data.
+
+                dst[0] = static_cast<uint8_t>(0xff - cmya[0]); // C
+                dst[1] = static_cast<uint8_t>(0xff - cmya[1]); // M
+                dst[2] = static_cast<uint8_t>(0xff - cmya[2]); // Y
+                dst[3] = static_cast<uint8_t>(0xff - key[0]);  // K
+
+                if (hasTransparency)
+                {
+                    dst[4] = cmya[3]; // A
+                }
+
+                dst += totalChannelCount;
+                cmya += cmyaChannelCount;
+                key++;
+            }
+        }
+
+        return callbacks->setLayerData(outputScan0, layerName, layerNameLengthInBytes);
+    }
 }
 
 DecoderStatus DecoderReadImage(
@@ -142,6 +249,8 @@ DecoderStatus DecoderReadImage(
         bool readingXmpBox = false;
         DecoderImageFormat decoderImageFormat{};
         std::vector<char> layerNameBuffer;
+        size_t cmykBlackChannelIndex = std::numeric_limits<size_t>::max();
+        std::vector<uint8_t> cmykBlackChannelBuffer;
 
         while (true)
         {
@@ -275,16 +384,27 @@ DecoderStatus DecoderReadImage(
                     return DecoderStatus::ImageDimensionExceedsInt32;
                 }
 
-                if (colorChannelCount != 1 && colorChannelCount != 3 ||
-                    extraChannelCount > 1 ||
-                    extraChannelCount == 1 && !hasTransparency)
+                if (colorChannelCount != 1 && colorChannelCount != 3
+                    || !ExtraChannelsAreSupported(dec.get(), basicInfo, cmykBlackChannelIndex))
                 {
-                    // The format is not gray or RGB with an optional alpha channel.
+                    // The format is not CMYK, Gray, or RGB with optional transparency.
                     return DecoderStatus::UnsupportedChannelFormat;
                 }
 
                 format.num_channels = colorChannelCount + (hasTransparency ? 1 : 0);
-                decoderImageFormat = colorChannelCount == 1 ? DecoderImageFormat::Gray : DecoderImageFormat::Rgb;
+
+                if (colorChannelCount == 1)
+                {
+                    decoderImageFormat = DecoderImageFormat::Gray;
+                }
+                else if (cmykBlackChannelIndex != std::numeric_limits<size_t>::max())
+                {
+                    decoderImageFormat = DecoderImageFormat::Cmyk;
+                }
+                else
+                {
+                    decoderImageFormat = DecoderImageFormat::Rgb;
+                }
 
                 callbacks->setBasicInfo(width, height, decoderImageFormat, hasTransparency);
             }
@@ -411,8 +531,27 @@ DecoderStatus DecoderReadImage(
                     imageOutBuffer.data(),
                     imageOutBuffer.size()) != JXL_DEC_SUCCESS)
                 {
-                    SetErrorMessage(errorInfo, "JxlDecoderSetImageOutCallback failed.");
+                    SetErrorMessage(errorInfo, "JxlDecoderSetImageOutBuffer failed.");
                     return DecoderStatus::DecodeError;
+                }
+
+                if (decoderImageFormat == DecoderImageFormat::Cmyk)
+                {
+                    if (cmykBlackChannelBuffer.size() == 0)
+                    {
+                        cmykBlackChannelBuffer.resize(static_cast<size_t>(basicInfo.xsize) * basicInfo.ysize);
+                    }
+
+                    if (JxlDecoderSetExtraChannelBuffer(
+                        dec.get(),
+                        &format,
+                        cmykBlackChannelBuffer.data(),
+                        cmykBlackChannelBuffer.size(),
+                        static_cast<uint32_t>(cmykBlackChannelIndex)) != JXL_DEC_SUCCESS)
+                    {
+                        SetErrorMessage(errorInfo, "JxlDecoderSetExtraChannelBuffer failed.");
+                        return DecoderStatus::DecodeError;
+                    }
                 }
             }
             else if (status == JXL_DEC_FULL_IMAGE)
@@ -430,12 +569,30 @@ DecoderStatus DecoderReadImage(
                         layerNameLengthInBytes = layerNameBuffer.size();
                     }
 
-                    if (!callbacks->setLayerData(
-                        imageOutBuffer.data(),
-                        layerNamePtr,
-                        layerNameLengthInBytes))
+                    if (decoderImageFormat == DecoderImageFormat::Cmyk)
                     {
-                        return DecoderStatus::CreateLayerError;
+                        if (!SetCmykImageData(
+                            callbacks,
+                            basicInfo.xsize,
+                            basicInfo.ysize,
+                            basicInfo.alpha_bits != 0,
+                            imageOutBuffer,
+                            cmykBlackChannelBuffer,
+                            layerNamePtr,
+                            layerNameLengthInBytes))
+                        {
+                            return DecoderStatus::CreateLayerError;
+                        }
+                    }
+                    else
+                    {
+                        if (!callbacks->setLayerData(
+                            imageOutBuffer.data(),
+                            layerNamePtr,
+                            layerNameLengthInBytes))
+                        {
+                            return DecoderStatus::CreateLayerError;
+                        }
                     }
                 }
                 else

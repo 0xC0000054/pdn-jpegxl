@@ -33,7 +33,8 @@ enum class DecoderStatus : int32_t
 enum class DecoderImageFormat : int32_t
 {
     Gray = 0,
-    Rgb
+    Rgb,
+    Cmyk
 };
 
 enum class KnownColorProfile : int32_t
