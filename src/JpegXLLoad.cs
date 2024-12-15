@@ -70,7 +70,13 @@ namespace JpegXLFileTypePlugin
             DecoderLayerData layerData = decoderImage.LayerData ?? throw new FormatException("The layer data was null.");
             JpegXLImageFormat format = decoderImage.Format;
 
-            BitmapLayer bitmapLayer = new(decoderImage.Width, decoderImage.Height);
+            BitmapLayer bitmapLayer = Layer.CreateBackgroundLayer(decoderImage.Width, decoderImage.Height);
+
+            if (!string.IsNullOrWhiteSpace(layerData.Name))
+            {
+                bitmapLayer.Name = layerData.Name;
+            }
+
             Surface surface = bitmapLayer.Surface;
 
             if (format == JpegXLImageFormat.Rgb)
