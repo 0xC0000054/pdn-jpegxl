@@ -11,6 +11,7 @@
 ////////////////////////////////////////////////////////////////////////
 
 #include "JxlEncoder.h"
+#include "ChunkedInputFrameSource.h"
 #include <jxl/encode_cxx.h>
 #include <array>
 #include <stdexcept>
@@ -74,74 +75,6 @@ namespace
         return format;
     }
 
-    std::vector<uint8_t> CreateJxlImageBuffer(const BitmapData* bitmap, OutputPixelFormat format)
-    {
-        const size_t width = static_cast<size_t>(bitmap->width);
-        const size_t height = static_cast<size_t>(bitmap->height);
-        const size_t srcStride = static_cast<size_t>(bitmap->stride);
-        const uint8_t* srcScan0 = bitmap->scan0;
-
-        size_t destChannelCount = 3;
-        switch (format)
-        {
-        case OutputPixelFormat::Gray:
-            destChannelCount = 1;
-            break;
-        case OutputPixelFormat::GrayAlpha:
-            destChannelCount = 2;
-            break;
-        case OutputPixelFormat::Rgb:
-            destChannelCount = 3;
-            break;
-        case OutputPixelFormat::Rgba:
-            destChannelCount = 4;
-            break;
-        }
-
-        const size_t destStride = width * destChannelCount;
-
-        std::vector<uint8_t> jxlImagePixels;
-        jxlImagePixels.resize(width * height * destChannelCount);
-
-        uint8_t* destScan0 = jxlImagePixels.data();
-
-        for (size_t y = 0; y < height; y++)
-        {
-            const ColorBgra* src = reinterpret_cast<const ColorBgra*>(srcScan0 + (y * srcStride));
-            uint8_t* dest = destScan0 + (y * destStride);
-
-            for (size_t x = 0; x < width; x++)
-            {
-                switch (format)
-                {
-                case OutputPixelFormat::Gray:
-                    dest[0] = src->r;
-                    break;
-                case OutputPixelFormat::GrayAlpha:
-                    dest[0] = src->r;
-                    dest[1] = src->a;
-                    break;
-                case OutputPixelFormat::Rgb:
-                    dest[0] = src->r;
-                    dest[1] = src->g;
-                    dest[2] = src->b;
-                    break;
-                case OutputPixelFormat::Rgba:
-                    dest[0] = src->r;
-                    dest[1] = src->g;
-                    dest[2] = src->b;
-                    dest[3] = src->a;
-                    break;
-                }
-
-                src++;
-                dest += destChannelCount;
-            }
-        }
-
-        return jxlImagePixels;
-    }
-
     bool ReportProgress(ProgressProc progressProc, int32_t progressPercentage)
     {
         bool shouldContinue = true;
@@ -176,7 +109,6 @@ EncoderStatus EncoderWriteImage(
         }
 
         const OutputPixelFormat outputPixelFormat = GetOutputPixelFormat(bitmap, metadata->iccProfileSize > 0);
-        const std::vector<uint8_t> outputPixels = CreateJxlImageBuffer(bitmap, outputPixelFormat);
 
         if (!ReportProgress(progressCallback, 5))
         {
@@ -354,9 +286,11 @@ EncoderStatus EncoderWriteImage(
             return EncoderStatus::UserCancelled;
         }
 
-        if (JxlEncoderAddImageFrame(encoderOptions, &format, outputPixels.data(), outputPixels.size()) != JXL_ENC_SUCCESS)
+        ChunkedInputFrameSource chunkedSource(bitmap, format);
+
+        if (JxlEncoderAddChunkedFrame(encoderOptions, JXL_TRUE, chunkedSource.ToJxlChunkedFrameInputSource()) != JXL_ENC_SUCCESS)
         {
-            SetErrorMessage(errorInfo, "JxlEncoderAddImageFrame failed.");
+            SetErrorMessage(errorInfo, "JxlEncoderAddChunkedFrame failed.");
             return EncoderStatus::EncodeError;
         }
 
