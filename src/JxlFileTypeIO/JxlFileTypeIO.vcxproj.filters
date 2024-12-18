@@ -13,42 +13,54 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Header Files\Decoder">
+      <UniqueIdentifier>{b04b4fe7-e581-4725-92ab-105237aa738a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Decoder">
+      <UniqueIdentifier>{21f0afbf-92aa-4629-ad66-d7ff8ae85def}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Encoder">
+      <UniqueIdentifier>{ac35f657-7ddd-4c48-8610-a4d01fcfc8af}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Encoder">
+      <UniqueIdentifier>{774d8fc8-8489-4dc8-b3f1-77bdf3b3f19c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="JxlFileTypeIO.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="JxlDecoder.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Common.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="JxlDecoderTypes.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="JxlEncoder.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="JxlEncoderTypes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Decoder\JxlDecoder.h">
+      <Filter>Header Files\Decoder</Filter>
+    </ClInclude>
+    <ClInclude Include="Decoder\JxlDecoderTypes.h">
+      <Filter>Header Files\Decoder</Filter>
+    </ClInclude>
+    <ClInclude Include="Encoder\JxlEncoder.h">
+      <Filter>Header Files\Encoder</Filter>
+    </ClInclude>
+    <ClInclude Include="Encoder\JxlEncoderTypes.h">
+      <Filter>Header Files\Encoder</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="JxlFileTypeIO.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="JxlDecoder.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Common.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="JxlEncoder.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="Decoder\JxlDecoder.cpp">
+      <Filter>Source Files\Decoder</Filter>
+    </ClCompile>
+    <ClCompile Include="Encoder\JxlEncoder.cpp">
+      <Filter>Source Files\Encoder</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
