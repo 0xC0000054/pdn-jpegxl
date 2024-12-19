@@ -111,7 +111,7 @@ const void* ChunkedInputFrameSource::GetColorChannelDataAt(
     for (size_t y = top; y < bottom; y++)
     {
         const ColorBgra* src = reinterpret_cast<const ColorBgra*>(srcScan0 + (y * srcStride) + (left * sizeof(ColorBgra)));
-        uint8_t* dest = destScan0 + (y * destStride);
+        uint8_t* dest = destScan0 + ((y - top) * destStride);
 
         for (size_t x = left; x < right; x++)
         {
@@ -174,7 +174,7 @@ const void* ChunkedInputFrameSource::GetExtraChannelDataAt(
     for (size_t y = top; y < bottom; y++)
     {
         const ColorBgra* src = reinterpret_cast<const ColorBgra*>(srcScan0 + (y * srcStride) + (left * sizeof(ColorBgra)));
-        uint8_t* dest = destScan0 + (y * destStride);
+        uint8_t* dest = destScan0 + ((y - top) * destStride);
 
         for (size_t x = left; x < right; x++)
         {
