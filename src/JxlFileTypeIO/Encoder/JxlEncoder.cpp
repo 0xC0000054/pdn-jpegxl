@@ -305,8 +305,17 @@ EncoderStatus EncoderWriteImage(
 
         if (JxlEncoderAddChunkedFrame(encoderOptions, JXL_TRUE, chunkedSource.ToJxlChunkedFrameInputSource()) != JXL_ENC_SUCCESS)
         {
-            SetErrorMessage(errorInfo, "JxlEncoderAddChunkedFrame failed.");
-            return EncoderStatus::EncodeError;
+            EncoderStatus writeStatus = outputProcessor.GetWriteStatus();
+
+            if (writeStatus != EncoderStatus::Ok)
+            {
+                return writeStatus;
+            }
+            else
+            {
+                SetErrorMessage(errorInfo, "JxlEncoderAddChunkedFrame failed.");
+                return EncoderStatus::EncodeError;
+            }
         }
 
         JxlEncoderCloseInput(enc.get());
