@@ -22,7 +22,7 @@ public:
     OutputProcessor(IOCallbacks* callbacks);
 
     EncoderStatus GetWriteStatus() const;
-    void InitializiProgressReporting(
+    void InitializeProgressReporting(
         ProgressProc progressCallback,
         int32_t initialProgressPercentage,
         int32_t maxProgressPercentage,

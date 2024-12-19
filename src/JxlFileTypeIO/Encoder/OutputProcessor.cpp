@@ -30,7 +30,7 @@ EncoderStatus OutputProcessor::GetWriteStatus() const
     return status;
 }
 
-void OutputProcessor::InitializiProgressReporting(
+void OutputProcessor::InitializeProgressReporting(
     ProgressProc progressCallback,
     int32_t initialProgressPercentage,
     int32_t maxProgressPercentage,

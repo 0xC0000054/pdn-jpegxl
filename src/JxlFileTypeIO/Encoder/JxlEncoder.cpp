@@ -295,7 +295,7 @@ EncoderStatus EncoderWriteImage(
         // The libjxl process output loop reserves the 40% to 90% range of the progress percentage.
         // If the process output loop takes more than 10 iterations the progress bar will stop at 90% but the
         // progress callback will still be called to allow for cancellation.
-        outputProcessor.InitializiProgressReporting(
+        outputProcessor.InitializeProgressReporting(
             progressCallback,
             40,
             90,
