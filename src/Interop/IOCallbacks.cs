@@ -15,6 +15,15 @@ using System.Runtime.InteropServices;
 namespace JpegXLFileTypePlugin.Interop
 {
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-    [return: MarshalAs(UnmanagedType.U1)]
-    internal unsafe delegate bool WriteDataCallback(byte* buffer, nuint bufferSize);
+    internal unsafe delegate int WriteDelegate(byte* buffer, nuint count);
+
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    internal delegate int SeekDelegate(ulong offset);
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct IOCallbacks
+    {
+        public nint Write;
+        public nint Seek;
+    }
 }

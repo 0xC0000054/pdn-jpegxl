@@ -205,6 +205,7 @@
     <ClInclude Include="Encoder\ChunkedInputFrameSource.h" />
     <ClInclude Include="Encoder\JxlEncoder.h" />
     <ClInclude Include="Encoder\JxlEncoderTypes.h" />
+    <ClInclude Include="Encoder\OutputProcessor.h" />
     <ClInclude Include="JxlFileTypeIO.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
@@ -213,6 +214,7 @@
     <ClCompile Include="Decoder\JxlDecoder.cpp" />
     <ClCompile Include="Encoder\ChunkedInputFrameSource.cpp" />
     <ClCompile Include="Encoder\JxlEncoder.cpp" />
+    <ClCompile Include="Encoder\OutputProcessor.cpp" />
     <ClCompile Include="JxlFileTypeIO.cpp" />
   </ItemGroup>
   <ItemGroup>

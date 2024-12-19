@@ -87,42 +87,41 @@ namespace JpegXLFileTypePlugin.Interop
                                               ProgressCallback? progressCallback,
                                               Stream output)
         {
-            using (JpegXLStreamWriter streamWriter = new(output, ownsStream: false))
+            StreamIOCallbacks streamIO = new(output);
+
+            IOCallbacks callbacks = streamIO.GetIOCallbacks();
+
+            BitmapData bitmapData = new()
             {
-                WriteDataCallback writeDataCallback = streamWriter.WriteDataCallback;
+                scan0 = (byte*)surface.Scan0.VoidStar,
+                width = (uint)surface.Width,
+                height = (uint)surface.Height,
+                stride = (uint)surface.Stride
+            };
 
-                BitmapData bitmapData = new()
-                {
-                    scan0 = (byte*)surface.Scan0.VoidStar,
-                    width = (uint)surface.Width,
-                    height = (uint)surface.Height,
-                    stride = (uint)surface.Stride
-                };
+            ErrorInfo errorInfo;
 
-                ErrorInfo errorInfo;
+            EncoderStatus status;
 
-                EncoderStatus status;
+            if (RuntimeInformation.ProcessArchitecture == Architecture.X64)
+            {
+                status = JpegXL_X64.SaveImage(bitmapData, options, metadata, callbacks, ref errorInfo, progressCallback);
+            }
+            else if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
+            {
+                status = JpegXL_Arm64.SaveImage(bitmapData, options, metadata, callbacks, ref errorInfo, progressCallback);
+            }
+            else
+            {
+                throw new PlatformNotSupportedException();
+            }
 
-                if (RuntimeInformation.ProcessArchitecture == Architecture.X64)
-                {
-                    status = JpegXL_X64.SaveImage(bitmapData, options, metadata, ref errorInfo, progressCallback, writeDataCallback);
-                }
-                else if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
-                {
-                    status = JpegXL_Arm64.SaveImage(bitmapData, options, metadata, ref errorInfo, progressCallback, writeDataCallback);
-                }
-                else
-                {
-                    throw new PlatformNotSupportedException();
-                }
+            GC.KeepAlive(progressCallback);
+            GC.KeepAlive(streamIO);
 
-                GC.KeepAlive(progressCallback);
-                GC.KeepAlive(writeDataCallback);
-
-                if (status != EncoderStatus.Ok)
-                {
-                    HandleEncoderError(status, errorInfo, streamWriter);
-                }
+            if (status != EncoderStatus.Ok)
+            {
+                HandleEncoderError(status, errorInfo, streamIO);
             }
         }
 
@@ -191,7 +190,7 @@ namespace JpegXLFileTypePlugin.Interop
             }
         }
 
-        private static unsafe void HandleEncoderError(EncoderStatus status, ErrorInfo errorInfo, JpegXLStreamWriter streamWriter)
+        private static unsafe void HandleEncoderError(EncoderStatus status, ErrorInfo errorInfo, StreamIOCallbacks streamIO)
         {
             if (status == EncoderStatus.EncodeError)
             {
@@ -208,7 +207,7 @@ namespace JpegXLFileTypePlugin.Interop
             }
             else if (status == EncoderStatus.WriteError)
             {
-                ExceptionDispatchInfo? exceptionDispatchInfo = streamWriter.ExceptionInfo;
+                ExceptionDispatchInfo? exceptionDispatchInfo = streamIO.ExceptionInfo;
 
                 if (exceptionDispatchInfo != null)
                 {

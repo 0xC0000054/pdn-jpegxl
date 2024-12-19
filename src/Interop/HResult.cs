@@ -10,15 +10,13 @@
 //
 ////////////////////////////////////////////////////////////////////////
 
-#pragma once
-
-#include "Common.h"
-#include "JxlEncoderTypes.h"
-
-EncoderStatus EncoderWriteImage(
-    const BitmapData* bitmap,
-    const EncoderOptions* options,
-    const EncoderImageMetadata* metadata,
-    IOCallbacks* callbacks,
-    ErrorInfo* errorInfo,
-    ProgressProc progressCallback);
+namespace JpegXLFileTypePlugin.Interop
+{
+    internal static class HResult
+    {
+        public const int S_OK = 0;
+        public const int E_POINTER = unchecked((int)0x80004003);
+        public const int E_ABORT = unchecked((int)0x80004004);
+        public const int SeekError = unchecked((int)0x80070019); // HRESULT_FROM_WIN32(ERROR_SEEK)
+    }
+}

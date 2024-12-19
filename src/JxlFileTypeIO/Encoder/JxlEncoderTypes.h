@@ -14,16 +14,12 @@
 
 #include <stdint.h>
 
-typedef bool(__stdcall* ProgressProc)(int32_t progressPrecentage);
-
-typedef bool(__stdcall* WriteDataProc)(const uint8_t* buffer, size_t bufferSize);
-
 enum class EncoderStatus : int32_t
 {
     Ok,
     NullParameter,
     OutOfMemory,
-    UserCancelled,
+    UserCanceled,
     EncodeError,
     WriteError
 };

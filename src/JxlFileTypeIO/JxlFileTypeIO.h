@@ -38,9 +38,9 @@ JXLFILETYPEIO_API EncoderStatus __stdcall SaveImage(
     const BitmapData* bitmap,
     const EncoderOptions* options,
     const EncoderImageMetadata* metadata,
+    IOCallbacks* callbacks,
     ErrorInfo* errorInfo,
-    ProgressProc progressCallback,
-    WriteDataProc writeDataCallback);
+    ProgressProc progressCallback);
 
 #ifdef __cplusplus
 }

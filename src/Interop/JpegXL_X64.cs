@@ -34,8 +34,8 @@ namespace JpegXLFileTypePlugin.Interop
         internal static partial EncoderStatus SaveImage(in BitmapData bitmap,
                                                         in EncoderOptions options,
                                                         in EncoderImageMetadata metadata,
+                                                        in IOCallbacks callbacks,
                                                         ref ErrorInfo errorInfo,
-                                                        [MarshalAs(UnmanagedType.FunctionPtr)] ProgressCallback? progressCallback,
-                                                        [MarshalAs(UnmanagedType.FunctionPtr)] WriteDataCallback writeDataCallback);
+                                                        [MarshalAs(UnmanagedType.FunctionPtr)] ProgressCallback? progressCallback);
     }
 }

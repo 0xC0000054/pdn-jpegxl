@@ -12,6 +12,7 @@
 
 #include "JxlEncoder.h"
 #include "ChunkedInputFrameSource.h"
+#include "OutputProcessor.h"
 #include <jxl/encode_cxx.h>
 #include <array>
 #include <stdexcept>
@@ -92,11 +93,11 @@ EncoderStatus EncoderWriteImage(
     const BitmapData* bitmap,
     const EncoderOptions* options,
     const EncoderImageMetadata* metadata,
+    IOCallbacks* callbacks,
     ErrorInfo* errorInfo,
-    ProgressProc progressCallback,
-    WriteDataProc writeDataCallback)
+    ProgressProc progressCallback)
 {
-    if (!bitmap || !options || !metadata || !writeDataCallback)
+    if (!bitmap || !options || !callbacks || !metadata)
     {
         return EncoderStatus::NullParameter;
     }
@@ -105,14 +106,14 @@ EncoderStatus EncoderWriteImage(
     {
         if (!ReportProgress(progressCallback, 0))
         {
-            return EncoderStatus::UserCancelled;
+            return EncoderStatus::UserCanceled;
         }
 
         const OutputPixelFormat outputPixelFormat = GetOutputPixelFormat(bitmap, metadata->iccProfileSize > 0);
 
         if (!ReportProgress(progressCallback, 5))
         {
-            return EncoderStatus::UserCancelled;
+            return EncoderStatus::UserCanceled;
         }
 
         auto runner = JxlResizableParallelRunnerMake(nullptr);
@@ -132,9 +133,14 @@ EncoderStatus EncoderWriteImage(
             return EncoderStatus::EncodeError;
         }
 
-        if (!ReportProgress(progressCallback, 10))
+        OutputProcessor outputProcessor(callbacks);
+
+        if (JxlEncoderSetOutputProcessor(
+            enc.get(),
+            outputProcessor.ToJxlOutputProcessor()) != JXL_ENC_SUCCESS)
         {
-            return EncoderStatus::UserCancelled;
+            SetErrorMessage(errorInfo, "JxlEncoderSetOutputProcessor failed.");
+            return EncoderStatus::EncodeError;
         }
 
         if (JxlEncoderUseBoxes(enc.get()) != JXL_ENC_SUCCESS)
@@ -188,7 +194,7 @@ EncoderStatus EncoderWriteImage(
 
         if (!ReportProgress(progressCallback, 15))
         {
-            return EncoderStatus::UserCancelled;
+            return EncoderStatus::UserCanceled;
         }
 
         if (JxlEncoderSetBasicInfo(enc.get(), &basicInfo) != JXL_ENC_SUCCESS)
@@ -199,7 +205,7 @@ EncoderStatus EncoderWriteImage(
 
         if (!ReportProgress(progressCallback, 20))
         {
-            return EncoderStatus::UserCancelled;
+            return EncoderStatus::UserCanceled;
         }
 
         if (metadata->iccProfileSize > 0)
@@ -258,7 +264,7 @@ EncoderStatus EncoderWriteImage(
 
         if (!ReportProgress(progressCallback, 25))
         {
-            return EncoderStatus::UserCancelled;
+            return EncoderStatus::UserCanceled;
         }
 
         JxlEncoderFrameSettings* encoderOptions = JxlEncoderFrameSettingsCreate(enc.get(), nullptr);
@@ -283,8 +289,17 @@ EncoderStatus EncoderWriteImage(
 
         if (!ReportProgress(progressCallback, 30))
         {
-            return EncoderStatus::UserCancelled;
+            return EncoderStatus::UserCanceled;
         }
+
+        // The libjxl process output loop reserves the 40% to 90% range of the progress percentage.
+        // If the process output loop takes more than 10 iterations the progress bar will stop at 90% but the
+        // progress callback will still be called to allow for cancellation.
+        outputProcessor.InitializiProgressReporting(
+            progressCallback,
+            40,
+            90,
+            5);
 
         ChunkedInputFrameSource chunkedSource(bitmap, format);
 
@@ -294,68 +309,33 @@ EncoderStatus EncoderWriteImage(
             return EncoderStatus::EncodeError;
         }
 
-        if (!ReportProgress(progressCallback, 50))
-        {
-            return EncoderStatus::UserCancelled;
-        }
-
         JxlEncoderCloseInput(enc.get());
 
-        // The libjxl process output loop reserves the 60% to 90% range of the progress percentage.
-        // If the process output loop takes more than 10 iterations the progress bar will stop at 90% but the
-        // progress callback will still be called to allow for cancellation.
-        int progressPercentageDone = 60;
-        int progressSegment = 0;
-        constexpr int maxProgressSegments = 10;
-        constexpr int progressPercentageStep = 3;
+        EncoderStatus writeStatus = outputProcessor.GetWriteStatus();
 
-        std::vector<uint8_t> compressed;
-        compressed.resize(262144);
-        uint8_t* next_out = compressed.data();
-        size_t avail_out = compressed.size() - (next_out - compressed.data());
-
-        JxlEncoderStatus processOutputStatus = JXL_ENC_NEED_MORE_OUTPUT;
-
-        while (processOutputStatus == JXL_ENC_NEED_MORE_OUTPUT)
+        if (writeStatus != EncoderStatus::Ok)
         {
-            if (!ReportProgress(progressCallback, progressPercentageDone))
-            {
-                return EncoderStatus::UserCancelled;
-            }
-
-            if (progressSegment < maxProgressSegments)
-            {
-                progressSegment++;
-                progressPercentageDone += progressPercentageStep;
-            }
-
-            processOutputStatus = JxlEncoderProcessOutput(enc.get(), &next_out, &avail_out);
-
-            if (processOutputStatus == JXL_ENC_NEED_MORE_OUTPUT)
-            {
-                size_t offset = next_out - compressed.data();
-                compressed.resize(compressed.size() * 2);
-                next_out = compressed.data() + offset;
-                avail_out = compressed.size() - offset;
-            }
-        }
-
-        if (processOutputStatus != JXL_ENC_SUCCESS)
-        {
-            SetErrorMessage(errorInfo, "JxlEncoderProcessOutput failed.");
-            return EncoderStatus::EncodeError;
+            return writeStatus;
         }
 
         if (!ReportProgress(progressCallback, 95))
         {
-            return EncoderStatus::UserCancelled;
+            return EncoderStatus::UserCanceled;
         }
 
-        const size_t compressedDataSize = next_out - compressed.data();
-
-        if (!writeDataCallback(compressed.data(), compressedDataSize))
+        if (JxlEncoderFlushInput(enc.get()) != JXL_ENC_SUCCESS)
         {
-            return EncoderStatus::WriteError;
+            EncoderStatus writeStatus = outputProcessor.GetWriteStatus();
+
+            if (writeStatus != EncoderStatus::Ok)
+            {
+                return writeStatus;
+            }
+            else
+            {
+                SetErrorMessage(errorInfo, "JxlEncoderFlushInput failed.");
+                return EncoderStatus::EncodeError;
+            }
         }
     }
     catch (const std::bad_alloc&)

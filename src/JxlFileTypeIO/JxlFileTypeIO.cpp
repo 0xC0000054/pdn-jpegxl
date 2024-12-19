@@ -33,9 +33,9 @@ EncoderStatus __stdcall SaveImage(
     const BitmapData* bitmap,
     const EncoderOptions* options,
     const EncoderImageMetadata* metadata,
+    IOCallbacks* callbacks,
     ErrorInfo* errorInfo,
-    ProgressProc progressCallback,
-    WriteDataProc writeDataCallback)
+    ProgressProc progressCallback)
 {
-    return EncoderWriteImage(bitmap, options, metadata, errorInfo, progressCallback, writeDataCallback);
+    return EncoderWriteImage(bitmap, options, metadata, callbacks, errorInfo, progressCallback);
 }

@@ -30,11 +30,18 @@ struct ColorBgra
     uint8_t a;
 };
 
-enum class MetadataType : int32_t
+typedef bool(__stdcall* ProgressProc)(int32_t progressPrecentage);
+
+// The I/O Callbacks return a Windows HRESULT, we do not include Windows.h
+// in this header to avoid naming conflicts with method names in other files.
+
+typedef int32_t(__stdcall* WriteCallback)(const uint8_t* buffer, size_t sizeInBytes);
+typedef int32_t(__stdcall* SeekCallback)(uint64_t position);
+
+struct IOCallbacks
 {
-    Exif,
-    IccProfile,
-    Xmp
+    WriteCallback Write;
+    SeekCallback Seek;
 };
 
 struct ErrorInfo
