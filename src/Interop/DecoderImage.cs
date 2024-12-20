@@ -86,6 +86,7 @@ namespace JpegXLFileTypePlugin.Interop
             {
                 JpegXLImageFormat.Gray => profileHeader.ColorSpace == ICCProfile.ProfileColorSpace.Gray,
                 JpegXLImageFormat.Rgb => profileHeader.ColorSpace == ICCProfile.ProfileColorSpace.Rgb,
+                JpegXLImageFormat.Cmyk => profileHeader.ColorSpace == ICCProfile.ProfileColorSpace.Cmyk,
                 _ => false,
             };
         }
@@ -228,6 +229,17 @@ namespace JpegXLFileTypePlugin.Interop
                         SetRgbImageData(pixels, layerData);
                     }
                 }
+                else if (format == JpegXLImageFormat.Cmyk)
+                {
+                    if (hasTransparency)
+                    {
+                        SetCmykAlphaImageData(pixels, layerData);
+                    }
+                    else
+                    {
+                        SetCmykImageData(pixels, layerData);
+                    }
+                }
                 else
                 {
                     throw new InvalidEnumArgumentException(nameof(Format), (int)Format, typeof(JpegXLImageFormat));
@@ -272,6 +284,74 @@ namespace JpegXLFileTypePlugin.Interop
             }
 
             base.Dispose(disposing);
+        }
+
+        private void SetCmykImageData(byte* srcScan0, DecoderLayerData layerData)
+        {
+            int width = Width;
+            int height = Height;
+
+            using (IBitmapLock colorBitmapLock = layerData.Color!.Lock(BitmapLockOptions.Write))
+            {
+                nuint srcStride = (nuint)(uint)width * 4;
+                RegionPtr<ColorCmyk32> color = new((ColorCmyk32*)colorBitmapLock.Buffer,
+                                                   colorBitmapLock.Size,
+                                                   colorBitmapLock.BufferStride);
+
+                for (int y = 0; y < height; y++)
+                {
+                    byte* src = srcScan0 + (((uint)y) * srcStride);
+                    ColorCmyk32* colorDst = color.Rows[y].Ptr;
+
+                    for (int x = 0; x < width; x++)
+                    {
+                        colorDst->C = src[0];
+                        colorDst->M = src[1];
+                        colorDst->Y = src[2];
+                        colorDst->K = src[3];
+
+                        src += 4;
+                        colorDst++;
+                    }
+                }
+            }
+        }
+
+        private void SetCmykAlphaImageData(byte* srcScan0, DecoderLayerData layerData)
+        {
+            int width = Width;
+            int height = Height;
+
+            using (IBitmapLock colorBitmapLock = layerData.Color!.Lock(BitmapLockOptions.Write))
+            using (IBitmapLock transparencyBitmapLock = layerData.Transparency!.Lock(BitmapLockOptions.Write))
+            {
+                nuint srcStride = (nuint)(uint)width * 5;
+                RegionPtr<ColorCmyk32> color = new((ColorCmyk32*)colorBitmapLock.Buffer,
+                                                  colorBitmapLock.Size,
+                                                  colorBitmapLock.BufferStride);
+                byte* transparencyScan0 = (byte*)transparencyBitmapLock.Buffer;
+                int transparencyStride = transparencyBitmapLock.BufferStride;
+
+                for (int y = 0; y < height; y++)
+                {
+                    byte* src = srcScan0 + (((uint)y) * srcStride);
+                    ColorCmyk32* colorDst = color.Rows[y].Ptr;
+                    byte* transparencyDst = transparencyScan0 + (((long)y) * transparencyStride);
+
+                    for (int x = 0; x < width; x++)
+                    {
+                        colorDst->C = src[0];
+                        colorDst->M = src[1];
+                        colorDst->Y = src[2];
+                        colorDst->K = src[3];
+                        *transparencyDst = src[4];
+
+                        src += 5;
+                        colorDst++;
+                        transparencyDst++;
+                    }
+                }
+            }
         }
 
         private void SetGrayImageData(byte* srcScan0, DecoderLayerData layerData)

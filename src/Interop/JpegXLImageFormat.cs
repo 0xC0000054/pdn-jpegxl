@@ -16,5 +16,6 @@ namespace JpegXLFileTypePlugin.Interop
     {
         Gray = 0,
         Rgb = 1,
+        Cmyk = 2,
     }
 }
