@@ -11,8 +11,8 @@
 ////////////////////////////////////////////////////////////////////////
 
 #include "JxlEncoder.h"
-#include "ChunkedInputFrameSource.h"
 #include "OutputProcessor.h"
+#include "PixelFormatConversion.h"
 #include <jxl/encode_cxx.h>
 #include <array>
 #include <stdexcept>
@@ -87,6 +87,61 @@ namespace
 
         return shouldContinue;
     }
+
+    EncoderStatus AddFrame(
+        const BitmapData* bitmap,
+        const JxlBasicInfo& basicInfo,
+        const JxlEncoderFrameSettings* frameSettings,
+        const OutputProcessor& outputProcessor,
+        ErrorInfo* errorInfo)
+    {
+        const uint32_t numberOfChannels = basicInfo.num_color_channels + basicInfo.num_extra_channels;
+
+        std::vector<uint8_t> frameBuffer;
+        frameBuffer.resize(static_cast<size_t>(basicInfo.xsize) * basicInfo.ysize * numberOfChannels);
+
+        switch (numberOfChannels)
+        {
+        case 1:
+            PixelFormatConversion::BgraToGray(bitmap, frameBuffer.data());
+            break;
+        case 2:
+            PixelFormatConversion::BgraToGrayAlpha(bitmap, frameBuffer.data());
+            break;
+        case 3:
+            PixelFormatConversion::BgraToRgb(bitmap, frameBuffer.data());
+            break;
+        case 4:
+            PixelFormatConversion::BgraToRgba(bitmap, frameBuffer.data());
+            break;
+        default:
+            return EncoderStatus::EncodeError;
+        }
+
+        JxlPixelFormat format{};
+        format.num_channels = numberOfChannels;
+        format.data_type = JXL_TYPE_UINT8;
+        format.endianness = JXL_NATIVE_ENDIAN;
+
+        EncoderStatus status = EncoderStatus::Ok;
+
+        if (JxlEncoderAddImageFrame(
+            frameSettings,
+            &format,
+            frameBuffer.data(),
+            frameBuffer.size()) != JXL_ENC_SUCCESS)
+        {
+            status = outputProcessor.GetWriteStatus();
+
+            if (status == EncoderStatus::Ok)
+            {
+                SetErrorMessage(errorInfo, "JxlEncoderAddImageFrame failed.");
+                status = EncoderStatus::EncodeError;
+            }
+        }
+
+        return status;
+    }
 }
 
 EncoderStatus EncoderWriteImage(
@@ -160,35 +215,27 @@ EncoderStatus EncoderWriteImage(
         basicInfo.alpha_exponent_bits = 0;
         basicInfo.alpha_premultiplied = false;
 
-        JxlPixelFormat format{};
-        format.data_type = JXL_TYPE_UINT8;
-        format.endianness = JXL_NATIVE_ENDIAN;
-
         switch (outputPixelFormat)
         {
         case OutputPixelFormat::Gray:
             basicInfo.num_color_channels = 1;
             basicInfo.num_extra_channels = 0;
             basicInfo.alpha_bits = 0;
-            format.num_channels = 1;
             break;
         case OutputPixelFormat::GrayAlpha:
             basicInfo.num_color_channels = 1;
             basicInfo.num_extra_channels = 1;
             basicInfo.alpha_bits = basicInfo.bits_per_sample;
-            format.num_channels = 2;
             break;
         case OutputPixelFormat::Rgb:
             basicInfo.num_color_channels = 3;
             basicInfo.num_extra_channels = 0;
             basicInfo.alpha_bits = 0;
-            format.num_channels = 3;
             break;
         case OutputPixelFormat::Rgba:
             basicInfo.num_color_channels = 3;
             basicInfo.num_extra_channels = 1;
             basicInfo.alpha_bits = basicInfo.bits_per_sample;
-            format.num_channels = 4;
             break;
         }
 
@@ -267,29 +314,24 @@ EncoderStatus EncoderWriteImage(
             return EncoderStatus::UserCanceled;
         }
 
-        JxlEncoderFrameSettings* encoderOptions = JxlEncoderFrameSettingsCreate(enc.get(), nullptr);
+        JxlEncoderFrameSettings* frameSettings = JxlEncoderFrameSettingsCreate(enc.get(), nullptr);
 
-        if (JxlEncoderSetFrameDistance(encoderOptions, options->distance) != JXL_ENC_SUCCESS)
+        if (JxlEncoderSetFrameDistance(frameSettings, options->distance) != JXL_ENC_SUCCESS)
         {
             SetErrorMessage(errorInfo, "JxlEncoderOptionsSetDistance failed.");
             return EncoderStatus::EncodeError;
         }
 
-        if (JxlEncoderSetFrameLossless(encoderOptions, options->lossless) != JXL_ENC_SUCCESS)
+        if (JxlEncoderSetFrameLossless(frameSettings, options->lossless) != JXL_ENC_SUCCESS)
         {
             SetErrorMessage(errorInfo, "JxlEncoderOptionsSetLossless failed.");
             return EncoderStatus::EncodeError;
         }
 
-        if (JxlEncoderFrameSettingsSetOption(encoderOptions, JXL_ENC_FRAME_SETTING_EFFORT, options->speed) != JXL_ENC_SUCCESS)
+        if (JxlEncoderFrameSettingsSetOption(frameSettings, JXL_ENC_FRAME_SETTING_EFFORT, options->speed) != JXL_ENC_SUCCESS)
         {
             SetErrorMessage(errorInfo, "JxlEncoderOptionsSetEffort failed.");
             return EncoderStatus::EncodeError;
-        }
-
-        if (!ReportProgress(progressCallback, 30))
-        {
-            return EncoderStatus::UserCanceled;
         }
 
         // The libjxl process output loop reserves the 40% to 90% range of the progress percentage.
@@ -297,34 +339,24 @@ EncoderStatus EncoderWriteImage(
         // progress callback will still be called to allow for cancellation.
         outputProcessor.InitializeProgressReporting(
             progressCallback,
-            40,
+            30,
             90,
             5);
 
-        ChunkedInputFrameSource chunkedSource(bitmap, format);
+        EncoderStatus status = AddFrame(bitmap, basicInfo, frameSettings, outputProcessor, errorInfo);
 
-        if (JxlEncoderAddChunkedFrame(encoderOptions, JXL_TRUE, chunkedSource.ToJxlChunkedFrameInputSource()) != JXL_ENC_SUCCESS)
+        if (status != EncoderStatus::Ok)
         {
-            EncoderStatus writeStatus = outputProcessor.GetWriteStatus();
-
-            if (writeStatus != EncoderStatus::Ok)
-            {
-                return writeStatus;
-            }
-            else
-            {
-                SetErrorMessage(errorInfo, "JxlEncoderAddChunkedFrame failed.");
-                return EncoderStatus::EncodeError;
-            }
+            return status;
         }
 
         JxlEncoderCloseInput(enc.get());
 
-        EncoderStatus writeStatus = outputProcessor.GetWriteStatus();
+        status = outputProcessor.GetWriteStatus();
 
-        if (writeStatus != EncoderStatus::Ok)
+        if (status != EncoderStatus::Ok)
         {
-            return writeStatus;
+            return status;
         }
 
         if (!ReportProgress(progressCallback, 95))
@@ -334,11 +366,11 @@ EncoderStatus EncoderWriteImage(
 
         if (JxlEncoderFlushInput(enc.get()) != JXL_ENC_SUCCESS)
         {
-            EncoderStatus writeStatus = outputProcessor.GetWriteStatus();
+            status = outputProcessor.GetWriteStatus();
 
-            if (writeStatus != EncoderStatus::Ok)
+            if (status != EncoderStatus::Ok)
             {
-                return writeStatus;
+                return status;
             }
             else
             {

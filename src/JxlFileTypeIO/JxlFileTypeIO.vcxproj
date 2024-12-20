@@ -202,19 +202,19 @@
     <ClInclude Include="Common.h" />
     <ClInclude Include="Decoder\JxlDecoder.h" />
     <ClInclude Include="Decoder\JxlDecoderTypes.h" />
-    <ClInclude Include="Encoder\ChunkedInputFrameSource.h" />
     <ClInclude Include="Encoder\JxlEncoder.h" />
     <ClInclude Include="Encoder\JxlEncoderTypes.h" />
     <ClInclude Include="Encoder\OutputProcessor.h" />
+    <ClInclude Include="Encoder\PixelFormatConversion.h" />
     <ClInclude Include="JxlFileTypeIO.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Common.cpp" />
     <ClCompile Include="Decoder\JxlDecoder.cpp" />
-    <ClCompile Include="Encoder\ChunkedInputFrameSource.cpp" />
     <ClCompile Include="Encoder\JxlEncoder.cpp" />
     <ClCompile Include="Encoder\OutputProcessor.cpp" />
+    <ClCompile Include="Encoder\PixelFormatConversion.cpp" />
     <ClCompile Include="JxlFileTypeIO.cpp" />
   </ItemGroup>
   <ItemGroup>

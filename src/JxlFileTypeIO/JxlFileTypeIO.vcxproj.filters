@@ -48,10 +48,10 @@
     <ClInclude Include="Encoder\JxlEncoderTypes.h">
       <Filter>Header Files\Encoder</Filter>
     </ClInclude>
-    <ClInclude Include="Encoder\ChunkedInputFrameSource.h">
+    <ClInclude Include="Encoder\OutputProcessor.h">
       <Filter>Header Files\Encoder</Filter>
     </ClInclude>
-    <ClInclude Include="Encoder\OutputProcessor.h">
+    <ClInclude Include="Encoder\PixelFormatConversion.h">
       <Filter>Header Files\Encoder</Filter>
     </ClInclude>
   </ItemGroup>
@@ -68,10 +68,10 @@
     <ClCompile Include="Encoder\JxlEncoder.cpp">
       <Filter>Source Files\Encoder</Filter>
     </ClCompile>
-    <ClCompile Include="Encoder\ChunkedInputFrameSource.cpp">
+    <ClCompile Include="Encoder\OutputProcessor.cpp">
       <Filter>Source Files\Encoder</Filter>
     </ClCompile>
-    <ClCompile Include="Encoder\OutputProcessor.cpp">
+    <ClCompile Include="Encoder\PixelFormatConversion.cpp">
       <Filter>Source Files\Encoder</Filter>
     </ClCompile>
   </ItemGroup>
