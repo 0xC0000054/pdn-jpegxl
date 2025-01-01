@@ -61,6 +61,10 @@ namespace
                     {
                         return SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::Srgb);
                     }
+                    else if (colorEncoding.primaries == JXL_PRIMARIES_P3)
+                    {
+                        return SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::DisplayP3);
+                    }
                 }
                 else if (colorEncoding.color_space == JXL_COLOR_SPACE_GRAY)
                 {

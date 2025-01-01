@@ -43,6 +43,7 @@ enum class KnownColorProfile : int32_t
     LinearSrgb,
     LinearGray,
     GraySrgbTRC,
+    DisplayP3,
 };
 
 typedef void(__stdcall* DecoderSetBasicInfo)(

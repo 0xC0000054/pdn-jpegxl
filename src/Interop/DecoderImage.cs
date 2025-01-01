@@ -129,6 +129,7 @@ namespace JpegXLFileTypePlugin.Interop
                 {
                     KnownColorProfile.Srgb => KnownColorSpace.Srgb,
                     KnownColorProfile.LinearSrgb => KnownColorSpace.ScRgb,
+                    KnownColorProfile.DisplayP3 => KnownColorSpace.DisplayP3,
                     _ => null,
                 };
 
