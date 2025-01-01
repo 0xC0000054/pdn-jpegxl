@@ -106,7 +106,7 @@ namespace JpegXLFileTypePlugin.Exif
 
                     if (exifDataStart < stream.Length)
                     {
-                        long exifDataLength = stream.Position - exifDataStart;
+                        long exifDataLength = stream.Length - exifDataStart;
 
                         result = new StreamSegment(stream, exifDataStart, exifDataLength, leaveOpen: true);
                     }
