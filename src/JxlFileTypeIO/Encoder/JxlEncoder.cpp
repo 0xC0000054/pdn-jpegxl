@@ -211,7 +211,7 @@ EncoderStatus EncoderWriteImage(
         basicInfo.ysize = bitmap->height;
         basicInfo.bits_per_sample = 8;
         basicInfo.exponent_bits_per_sample = 0;
-        basicInfo.uses_original_profile = options->lossless || metadata && metadata->iccProfileSize > 0;
+        basicInfo.uses_original_profile = options->lossless;
         basicInfo.alpha_exponent_bits = 0;
         basicInfo.alpha_premultiplied = false;
 
