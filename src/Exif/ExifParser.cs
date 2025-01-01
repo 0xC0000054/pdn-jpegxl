@@ -36,23 +36,28 @@ namespace JpegXLFileTypePlugin.Exif
 
             ExifValueCollection? exifValues = null;
 
+            StreamSegment? streamSegment = TryParseExifBlockHeader(stream);
+
             try
             {
-                Endianess? byteOrder = TryDetectTiffByteOrder(stream);
-
-                if (byteOrder.HasValue)
+                if (streamSegment != null)
                 {
-                    using (EndianBinaryReader reader = new(stream, byteOrder.Value, true))
+                    Endianess? byteOrder = TryDetectTiffByteOrder(streamSegment);
+
+                    if (byteOrder.HasValue)
                     {
-                        ushort signature = reader.ReadUInt16();
-
-                        if (signature == TiffConstants.Signature)
+                        using (EndianBinaryReader reader = new(streamSegment, byteOrder.Value, true))
                         {
-                            uint ifdOffset = reader.ReadUInt32();
+                            ushort signature = reader.ReadUInt16();
 
-                            List<ParserIFDEntry> entries = ParseDirectories(reader, ifdOffset);
+                            if (signature == TiffConstants.Signature)
+                            {
+                                uint ifdOffset = reader.ReadUInt32();
 
-                            exifValues = new ExifValueCollection(ConvertIFDEntriesToMetadataEntries(reader, entries));
+                                List<ParserIFDEntry> entries = ParseDirectories(reader, ifdOffset);
+
+                                exifValues = new ExifValueCollection(ConvertIFDEntriesToMetadataEntries(reader, entries));
+                            }
                         }
                     }
                 }
@@ -62,8 +67,53 @@ namespace JpegXLFileTypePlugin.Exif
                 // The EXIF data is corrupt, ignore it.
                 exifValues = null;
             }
+            finally
+            {
+                streamSegment?.Dispose();
+            }
 
             return exifValues;
+        }
+
+        private static StreamSegment? TryParseExifBlockHeader(Stream stream)
+        {
+            StreamSegment? result = null;
+
+            if (stream.Length > 4)
+            {
+                Span<byte> buffer = stackalloc byte[sizeof(uint)];
+
+                stream.ReadExactly(buffer);
+
+                // The EXIF data block has a header consisting of a big-endian 4-byte unsigned integer
+                // that indicates the number of bytes that come before the start of the TIFF header.
+                // See ISO/IEC 23008-12:2017 section A.2.1.
+
+                uint offset = BinaryPrimitives.ReadUInt32BigEndian(buffer);
+
+                // Previous versions of the plugin incorrectly omitted the EXIF data offset from the EXIF box.
+                // We detect this case as the little-endian EXIF data signature and use a box offset of 0.
+                const uint legacyExifOffset = 0x49492A00;
+
+                if (offset == 0 || offset == legacyExifOffset)
+                {
+                    result = new StreamSegment(stream, 0, stream.Length, leaveOpen: true);
+                }
+                else
+                {
+                    // Check that the starting location is within the box.
+                    long exifDataStart = stream.Position + offset;
+
+                    if (exifDataStart < stream.Length)
+                    {
+                        long exifDataLength = stream.Position - exifDataStart;
+
+                        result = new StreamSegment(stream, exifDataStart, exifDataLength, leaveOpen: true);
+                    }
+                }
+            }
+
+            return result;
         }
 
         private static Endianess? TryDetectTiffByteOrder(Stream stream)

@@ -79,7 +79,9 @@ namespace JpegXLFileTypePlugin.Exif
             IFDInfo ifdInfo = BuildIFDEntries();
             Dictionary<ExifSection, IFDEntryInfo> ifdEntries = ifdInfo.IFDEntries;
 
-            byte[] exifBytes = new byte[checked((int)ifdInfo.EXIFDataLength)];
+            long exifBoxLength = sizeof(uint) + ifdInfo.EXIFDataLength;
+
+            byte[] exifBytes = new byte[checked((int)exifBoxLength)];
 
             using (MemoryStream stream = new(exifBytes))
             using (BinaryWriter writer = new(stream))
@@ -87,6 +89,11 @@ namespace JpegXLFileTypePlugin.Exif
                 IFDEntryInfo imageInfo = ifdEntries[ExifSection.Image];
                 IFDEntryInfo exifInfo = ifdEntries[ExifSection.Photo];
 
+                // The EXIF data block has a header consisting of a big-endian 4-byte unsigned integer
+                // that indicates the number of bytes that come before the start of the TIFF header.
+                // See ISO/IEC 23008-12:2017 section A.2.1.
+                // As this value is always 0, we can write the value in little-endian.
+                writer.Write(0U);
                 writer.Write(TiffConstants.LittleEndianByteOrderMarker);
                 writer.Write(TiffConstants.Signature);
                 writer.Write((uint)imageInfo.StartOffset);
