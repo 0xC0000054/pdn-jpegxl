@@ -91,12 +91,12 @@ namespace JpegXLFileTypePlugin.Exif
 
                 uint offset = BinaryPrimitives.ReadUInt32BigEndian(buffer);
 
-                // Previous versions of the plugin incorrectly omitted the EXIF data offset from the EXIF box.
-                // We detect this case as the little-endian EXIF data signature and use a box offset of 0.
                 const uint legacyExifOffset = 0x49492A00;
 
-                if (offset == 0 || offset == legacyExifOffset)
+                if (offset == legacyExifOffset)
                 {
+                    // Previous versions of the plugin incorrectly omitted the EXIF data offset from the EXIF box.
+                    // We detect this case as the little-endian EXIF data signature and read the whole box.
                     result = new StreamSegment(stream, 0, stream.Length, leaveOpen: true);
                 }
                 else
