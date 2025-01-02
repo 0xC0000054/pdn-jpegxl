@@ -13,6 +13,7 @@
 using PaintDotNet;
 using PaintDotNet.Imaging;
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -83,17 +84,17 @@ namespace JpegXLFileTypePlugin.Exif
 
             byte[] exifBytes = new byte[checked((int)exifBoxLength)];
 
-            using (MemoryStream stream = new(exifBytes))
+            // The EXIF data block has a header consisting of a big-endian 4-byte unsigned integer
+            // that indicates the number of bytes that come before the start of the TIFF header.
+            // See ISO/IEC 23008-12:2017 section A.2.1.
+            BinaryPrimitives.WriteUInt32BigEndian(exifBytes, 0);
+
+            using (MemoryStream stream = new(exifBytes, sizeof(uint), (int)ifdInfo.EXIFDataLength))
             using (BinaryWriter writer = new(stream))
             {
                 IFDEntryInfo imageInfo = ifdEntries[ExifSection.Image];
                 IFDEntryInfo exifInfo = ifdEntries[ExifSection.Photo];
 
-                // The EXIF data block has a header consisting of a big-endian 4-byte unsigned integer
-                // that indicates the number of bytes that come before the start of the TIFF header.
-                // See ISO/IEC 23008-12:2017 section A.2.1.
-                // As this value is always 0, we can write the value in little-endian.
-                writer.Write(0U);
                 writer.Write(TiffConstants.LittleEndianByteOrderMarker);
                 writer.Write(TiffConstants.Signature);
                 writer.Write((uint)imageInfo.StartOffset);
