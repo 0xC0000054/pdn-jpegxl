@@ -79,7 +79,7 @@ namespace
             }
         }
 
-        return SetProfileFromEncodingStatus::UnsupportedColorEncoding;
+        return status;
     }
 
     bool ExtraChannelsAreSupported(
