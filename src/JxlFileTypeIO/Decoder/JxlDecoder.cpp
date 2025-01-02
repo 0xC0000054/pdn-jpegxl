@@ -37,38 +37,44 @@ namespace
         DecoderCallbacks* callbacks,
         const JxlColorEncoding& colorEncoding)
     {
-        if (colorEncoding.white_point == JXL_WHITE_POINT_D65)
+        SetProfileFromEncodingStatus status = SetProfileFromEncodingStatus::UnsupportedColorEncoding;
+
+        if (colorEncoding.color_space == JXL_COLOR_SPACE_RGB)
         {
-            if (colorEncoding.transfer_function == JXL_TRANSFER_FUNCTION_LINEAR)
+            if (colorEncoding.white_point == JXL_WHITE_POINT_D65)
             {
-                if (colorEncoding.color_space == JXL_COLOR_SPACE_RGB)
+                if (colorEncoding.transfer_function == JXL_TRANSFER_FUNCTION_LINEAR)
                 {
                     if (colorEncoding.primaries == JXL_PRIMARIES_SRGB)
                     {
-                        return SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::LinearSrgb);
+                        status = SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::LinearSrgb);
                     }
                 }
-                else if (colorEncoding.color_space == JXL_COLOR_SPACE_GRAY)
-                {
-                    return SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::LinearGray);
-                }
-            }
-            else if (colorEncoding.transfer_function == JXL_TRANSFER_FUNCTION_SRGB)
-            {
-                if (colorEncoding.color_space == JXL_COLOR_SPACE_RGB)
+                else if (colorEncoding.transfer_function == JXL_TRANSFER_FUNCTION_SRGB)
                 {
                     if (colorEncoding.primaries == JXL_PRIMARIES_SRGB)
                     {
-                        return SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::Srgb);
+                        status = SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::Srgb);
                     }
                     else if (colorEncoding.primaries == JXL_PRIMARIES_P3)
                     {
-                        return SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::DisplayP3);
+                        status = SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::DisplayP3);
                     }
                 }
-                else if (colorEncoding.color_space == JXL_COLOR_SPACE_GRAY)
+            }
+        }
+        else if (colorEncoding.color_space == JXL_COLOR_SPACE_GRAY)
+        {
+            if (colorEncoding.white_point == JXL_WHITE_POINT_D65)
+            {
+                switch (colorEncoding.transfer_function)
                 {
-                    return SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::GraySrgbTRC);
+                case JXL_TRANSFER_FUNCTION_LINEAR:
+                    status = SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::LinearGray);
+                    break;
+                case JXL_TRANSFER_FUNCTION_SRGB:
+                    status = SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::GraySrgbTRC);
+                    break;
                 }
             }
         }
