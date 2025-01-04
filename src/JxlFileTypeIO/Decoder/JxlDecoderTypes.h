@@ -27,7 +27,8 @@ enum class DecoderStatus : int32_t
     CreateLayerError,
     CreateMetadataError,
     DecodeError,
-    MetadataError
+    MetadataError,
+    InvalidFileSignature,
 };
 
 enum class DecoderImageFormat : int32_t

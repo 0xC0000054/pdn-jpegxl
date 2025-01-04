@@ -184,6 +184,8 @@ namespace JpegXLFileTypePlugin.Interop
                         throw new FormatException("The image uses an unsupported color channel format.");
                     case DecoderStatus.MetadataError:
                         throw new FormatException("An error occurred when decoding the image meta data.");
+                    case DecoderStatus.InvalidFileSignature:
+                        throw new FormatException("The file is truncated or invalid.");
                     default:
                         throw new FormatException("An unspecified error occurred when decoding the image.");
                 }

@@ -192,8 +192,7 @@ namespace
     DecoderStatus ReadFrameData(
         DecoderCallbacks* callbacks,
         JxlDecoder* dec,
-        ErrorInfo* errorInfo,
-        JxlBasicInfo& basicInfo)
+        ErrorInfo* errorInfo)
     {
         auto runner = JxlResizableParallelRunnerMake(nullptr);
 
@@ -223,6 +222,7 @@ namespace
             return DecoderStatus::DecodeError;
         }
 
+        JxlBasicInfo basicInfo{};
         JxlPixelFormat format{ 4, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0 };
         std::vector<uint8_t> imageOutBuffer;
         std::vector<uint8_t> iccProfileBuffer;
@@ -245,7 +245,7 @@ namespace
             }
             else if (status == JXL_DEC_BASIC_INFO)
             {
-                if (JxlDecoderGetBasicInfo(dec, std::addressof(basicInfo)) != JXL_DEC_SUCCESS)
+                if (JxlDecoderGetBasicInfo(dec, &basicInfo) != JXL_DEC_SUCCESS)
                 {
                     SetErrorMessage(errorInfo, "JxlDecoderGetBasicInfo failed.");
                     return DecoderStatus::DecodeError;
@@ -616,6 +616,13 @@ DecoderStatus DecoderReadImage(
 
     try
     {
+        const JxlSignature fileSignature = JxlSignatureCheck(data, dataSize);
+
+        if (fileSignature != JXL_SIG_CODESTREAM && fileSignature != JXL_SIG_CONTAINER)
+        {
+            return DecoderStatus::InvalidFileSignature;
+        }
+
         auto dec = JxlDecoderMake(nullptr);
 
         if (JxlDecoderSetInput(dec.get(), data, dataSize) != JXL_DEC_SUCCESS)
@@ -625,19 +632,16 @@ DecoderStatus DecoderReadImage(
         }
         JxlDecoderCloseInput(dec.get());
 
-        JxlBasicInfo basicInfo{};
-
-        DecoderStatus status = ReadFrameData(callbacks, dec.get(), errorInfo, basicInfo);
+        DecoderStatus status = ReadFrameData(callbacks, dec.get(), errorInfo);
 
         if (status != DecoderStatus::Ok)
         {
             return status;
         }
 
-        if (basicInfo.have_container)
+        if (fileSignature == JXL_SIG_CONTAINER)
         {
-            // Run a second decoding pass to look for the EXIF and/or XMP metadata.
-
+            // Parse the file again to look for EXIF and XMP metadata.
             JxlDecoderReleaseInput(dec.get());
             JxlDecoderReset(dec.get());
 

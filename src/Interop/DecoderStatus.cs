@@ -25,6 +25,7 @@ namespace JpegXLFileTypePlugin.Interop
         CreateLayerError,
         CreateMetadataError,
         DecodeError,
-        MetadataError
+        MetadataError,
+        InvalidFileSignature,
     }
 }
