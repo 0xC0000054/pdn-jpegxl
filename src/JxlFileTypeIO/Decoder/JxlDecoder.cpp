@@ -195,6 +195,17 @@ namespace
         ErrorInfo* errorInfo,
         JxlBasicInfo& basicInfo)
     {
+        auto runner = JxlResizableParallelRunnerMake(nullptr);
+
+        if (JxlDecoderSetParallelRunner(
+            dec,
+            JxlResizableParallelRunner,
+            runner.get()) != JXL_DEC_SUCCESS)
+        {
+            SetErrorMessage(errorInfo, "JxlDecoderSetParallelRunner failed.");
+            return DecoderStatus::DecodeError;
+        }
+
         if (JxlDecoderSubscribeEvents(
             dec,
             JXL_DEC_BASIC_INFO |
@@ -258,6 +269,9 @@ namespace
                     // The format is not CMYK, Gray, or RGB with optional transparency.
                     return DecoderStatus::UnsupportedChannelFormat;
                 }
+
+                uint32_t suggestedThreads = JxlResizableParallelRunnerSuggestThreads(basicInfo.xsize, basicInfo.ysize);
+                JxlResizableParallelRunnerSetThreads(runner.get(), suggestedThreads);
 
                 format.num_channels = colorChannelCount + (hasTransparency ? 1 : 0);
 
@@ -602,18 +616,7 @@ DecoderStatus DecoderReadImage(
 
     try
     {
-        auto runner = JxlResizableParallelRunnerMake(nullptr);
-
         auto dec = JxlDecoderMake(nullptr);
-
-        if (JxlDecoderSetParallelRunner(
-            dec.get(),
-            JxlResizableParallelRunner,
-            runner.get()) != JXL_DEC_SUCCESS)
-        {
-            SetErrorMessage(errorInfo, "JxlDecoderSetParallelRunner failed.");
-            return DecoderStatus::DecodeError;
-        }
 
         if (JxlDecoderSetInput(dec.get(), data, dataSize) != JXL_DEC_SUCCESS)
         {
@@ -636,7 +639,7 @@ DecoderStatus DecoderReadImage(
             // Run a second decoding pass to look for the EXIF and/or XMP metadata.
 
             JxlDecoderReleaseInput(dec.get());
-            JxlDecoderRewind(dec.get());
+            JxlDecoderReset(dec.get());
 
             if (JxlDecoderSetInput(dec.get(), data, dataSize) != JXL_DEC_SUCCESS)
             {
