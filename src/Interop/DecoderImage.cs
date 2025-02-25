@@ -13,6 +13,7 @@
 using JpegXLFileTypePlugin.Exif;
 using PaintDotNet;
 using PaintDotNet.Imaging;
+using PaintDotNet.Rendering;
 using System;
 using System.ComponentModel;
 using System.IO;
@@ -289,30 +290,35 @@ namespace JpegXLFileTypePlugin.Interop
 
         private void SetCmykImageData(byte* srcScan0, DecoderLayerData layerData)
         {
-            int width = Width;
-            int height = Height;
-
-            using (IBitmapLock colorBitmapLock = layerData.Color!.Lock(BitmapLockOptions.Write))
+            foreach (RectInt32 lockRect in BitmapUtil2.EnumerateLockRects(layerData.Color!))
             {
-                nuint srcStride = (nuint)(uint)width * 4;
-                RegionPtr<ColorCmyk32> color = new((ColorCmyk32*)colorBitmapLock.Buffer,
-                                                   colorBitmapLock.Size,
-                                                   colorBitmapLock.BufferStride);
+                uint srcRowOffset = (uint)lockRect.Top;
 
-                for (int y = 0; y < height; y++)
+                using (IBitmapLock colorBitmapLock = layerData.Color.Lock(lockRect, BitmapLockOptions.Write))
                 {
-                    byte* src = srcScan0 + (((uint)y) * srcStride);
-                    ColorCmyk32* colorDst = color.Rows[y].Ptr;
+                    SizeInt32 size = colorBitmapLock.Size;
+                    int width = size.Width;
+                    int height = size.Height;
+                    nuint srcStride = (nuint)(uint)width * 4;
+                    RegionPtr<ColorCmyk32> color = new((ColorCmyk32*)colorBitmapLock.Buffer,
+                                                       colorBitmapLock.Size,
+                                                       colorBitmapLock.BufferStride);
 
-                    for (int x = 0; x < width; x++)
+                    for (int y = 0; y < height; y++)
                     {
-                        colorDst->C = src[0];
-                        colorDst->M = src[1];
-                        colorDst->Y = src[2];
-                        colorDst->K = src[3];
+                        byte* src = srcScan0 + ((srcRowOffset + (uint)y) * srcStride);
+                        ColorCmyk32* colorDst = color.Rows[y].Ptr;
 
-                        src += 4;
-                        colorDst++;
+                        for (int x = 0; x < width; x++)
+                        {
+                            colorDst->C = src[0];
+                            colorDst->M = src[1];
+                            colorDst->Y = src[2];
+                            colorDst->K = src[3];
+
+                            src += 4;
+                            colorDst++;
+                        }
                     }
                 }
             }
@@ -320,36 +326,40 @@ namespace JpegXLFileTypePlugin.Interop
 
         private void SetCmykAlphaImageData(byte* srcScan0, DecoderLayerData layerData)
         {
-            int width = Width;
-            int height = Height;
-
-            using (IBitmapLock colorBitmapLock = layerData.Color!.Lock(BitmapLockOptions.Write))
-            using (IBitmapLock transparencyBitmapLock = layerData.Transparency!.Lock(BitmapLockOptions.Write))
+            foreach (RectInt32 lockRect in BitmapUtil2.EnumerateLockRects(layerData.Color!))
             {
-                nuint srcStride = (nuint)(uint)width * 5;
-                RegionPtr<ColorCmyk32> color = new((ColorCmyk32*)colorBitmapLock.Buffer,
-                                                  colorBitmapLock.Size,
-                                                  colorBitmapLock.BufferStride);
-                byte* transparencyScan0 = (byte*)transparencyBitmapLock.Buffer;
-                int transparencyStride = transparencyBitmapLock.BufferStride;
-
-                for (int y = 0; y < height; y++)
+                uint srcRowOffset = (uint)lockRect.Top;
+                using (IBitmapLock colorBitmapLock = layerData.Color.Lock(lockRect, BitmapLockOptions.Write))
+                using (IBitmapLock transparencyBitmapLock = layerData.Transparency!.Lock(lockRect, BitmapLockOptions.Write))
                 {
-                    byte* src = srcScan0 + (((uint)y) * srcStride);
-                    ColorCmyk32* colorDst = color.Rows[y].Ptr;
-                    byte* transparencyDst = transparencyScan0 + (((long)y) * transparencyStride);
+                    SizeInt32 size = colorBitmapLock.Size;
+                    int width = size.Width;
+                    int height = size.Height;
+                    nuint srcStride = (nuint)(uint)width * 5;
+                    RegionPtr<ColorCmyk32> color = new((ColorCmyk32*)colorBitmapLock.Buffer,
+                                                      colorBitmapLock.Size,
+                                                      colorBitmapLock.BufferStride);
+                    byte* transparencyScan0 = (byte*)transparencyBitmapLock.Buffer;
+                    int transparencyStride = transparencyBitmapLock.BufferStride;
 
-                    for (int x = 0; x < width; x++)
+                    for (int y = 0; y < height; y++)
                     {
-                        colorDst->C = src[0];
-                        colorDst->M = src[1];
-                        colorDst->Y = src[2];
-                        colorDst->K = src[3];
-                        *transparencyDst = src[4];
+                        byte* src = srcScan0 + ((srcRowOffset + (uint)y) * srcStride);
+                        ColorCmyk32* colorDst = color.Rows[y].Ptr;
+                        byte* transparencyDst = transparencyScan0 + (((long)y) * transparencyStride);
 
-                        src += 5;
-                        colorDst++;
-                        transparencyDst++;
+                        for (int x = 0; x < width; x++)
+                        {
+                            colorDst->C = src[0];
+                            colorDst->M = src[1];
+                            colorDst->Y = src[2];
+                            colorDst->K = src[3];
+                            *transparencyDst = src[4];
+
+                            src += 5;
+                            colorDst++;
+                            transparencyDst++;
+                        }
                     }
                 }
             }
@@ -357,27 +367,31 @@ namespace JpegXLFileTypePlugin.Interop
 
         private void SetGrayImageData(byte* srcScan0, DecoderLayerData layerData)
         {
-            int width = Width;
-            int height = Height;
-
-            using (IBitmapLock colorBitmapLock = layerData.Color!.Lock(BitmapLockOptions.Write))
+            foreach (RectInt32 lockRect in BitmapUtil2.EnumerateLockRects(layerData.Color!))
             {
-                nuint srcStride = (uint)width;
-
-                byte* dstScan0 = (byte*)colorBitmapLock.Buffer;
-                int dstStride = colorBitmapLock.BufferStride;
-
-                for (int y = 0; y < height; y++)
+                uint srcRowOffset = (uint)lockRect.Top;
+                using (IBitmapLock colorBitmapLock = layerData.Color.Lock(lockRect, BitmapLockOptions.Write))
                 {
-                    byte* src = srcScan0 + (((uint)y) * srcStride);
-                    byte* dst = dstScan0 + (((long)y) * dstStride);
+                    SizeInt32 size = colorBitmapLock.Size;
+                    int width = size.Width;
+                    int height = size.Height;
+                    nuint srcStride = (uint)width;
 
-                    for (int x = 0; x < width; x++)
+                    byte* dstScan0 = (byte*)colorBitmapLock.Buffer;
+                    int dstStride = colorBitmapLock.BufferStride;
+
+                    for (int y = 0; y < height; y++)
                     {
-                        *dst = *src;
+                        byte* src = srcScan0 + ((srcRowOffset + (uint)y) * srcStride);
+                        byte* dst = dstScan0 + (((long)y) * dstStride);
 
-                        src++;
-                        dst++;
+                        for (int x = 0; x < width; x++)
+                        {
+                            *dst = *src;
+
+                            src++;
+                            dst++;
+                        }
                     }
                 }
             }
@@ -385,33 +399,39 @@ namespace JpegXLFileTypePlugin.Interop
 
         private void SetGrayAlphaImageData(byte* srcScan0, DecoderLayerData layerData)
         {
-            int width = Width;
-            int height = Height;
-
-            using (IBitmapLock colorBitmapLock = layerData.Color!.Lock(BitmapLockOptions.Write))
-            using (IBitmapLock transparencyBitmapLock = layerData.Transparency!.Lock(BitmapLockOptions.Write))
+            foreach (RectInt32 lockRect in BitmapUtil2.EnumerateLockRects(layerData.Color!))
             {
-                nuint srcStride = (nuint)(uint)width * 2;
+                uint srcRowOffset = (uint)lockRect.Top;
 
-                byte* colorScan0 = (byte*)colorBitmapLock.Buffer;
-                int colorStride = colorBitmapLock.BufferStride;
-                byte* transparencyScan0 = (byte*)transparencyBitmapLock.Buffer;
-                int transparencyStride = transparencyBitmapLock.BufferStride;
-
-                for (int y = 0; y < height; y++)
+                using (IBitmapLock colorBitmapLock = layerData.Color.Lock(lockRect, BitmapLockOptions.Write))
+                using (IBitmapLock transparencyBitmapLock = layerData.Transparency!.Lock(lockRect, BitmapLockOptions.Write))
                 {
-                    byte* src = srcScan0 + (((uint)y) * srcStride);
-                    byte* colorDst = colorScan0 + (((long)y) * colorStride);
-                    byte* transparencyDst = transparencyScan0 + (((long)y) * transparencyStride);
+                    SizeInt32 size = colorBitmapLock.Size;
+                    int width = size.Width;
+                    int height = size.Height;
 
-                    for (int x = 0; x < width; x++)
+                    nuint srcStride = (nuint)(uint)width * 2;
+
+                    byte* colorScan0 = (byte*)colorBitmapLock.Buffer;
+                    int colorStride = colorBitmapLock.BufferStride;
+                    byte* transparencyScan0 = (byte*)transparencyBitmapLock.Buffer;
+                    int transparencyStride = transparencyBitmapLock.BufferStride;
+
+                    for (int y = 0; y < height; y++)
                     {
-                        *colorDst = src[0];
-                        *transparencyDst = src[1];
+                        byte* src = srcScan0 + ((srcRowOffset + (uint)y) * srcStride);
+                        byte* colorDst = colorScan0 + (((long)y) * colorStride);
+                        byte* transparencyDst = transparencyScan0 + (((long)y) * transparencyStride);
 
-                        src += 2;
-                        colorDst++;
-                        transparencyDst++;
+                        for (int x = 0; x < width; x++)
+                        {
+                            *colorDst = src[0];
+                            *transparencyDst = src[1];
+
+                            src += 2;
+                            colorDst++;
+                            transparencyDst++;
+                        }
                     }
                 }
             }
@@ -419,30 +439,35 @@ namespace JpegXLFileTypePlugin.Interop
 
         private void SetRgbImageData(byte* srcScan0, DecoderLayerData layerData)
         {
-            int width = Width;
-            int height = Height;
-
-            using (IBitmapLock colorBitmapLock = layerData.Color!.Lock(BitmapLockOptions.Write))
+            foreach (RectInt32 lockRect in BitmapUtil2.EnumerateLockRects(layerData.Color!))
             {
-                nuint srcStride = (nuint)(uint)width * 3;
+                uint srcRowOffset = (uint)lockRect.Top;
 
-                RegionPtr<ColorRgb24> color = new((ColorRgb24*)colorBitmapLock.Buffer,
-                                                  colorBitmapLock.Size,
-                                                  colorBitmapLock.BufferStride);
-
-                for (int y = 0; y < height; y++)
+                using (IBitmapLock colorBitmapLock = layerData.Color.Lock(lockRect, BitmapLockOptions.Write))
                 {
-                    byte* src = srcScan0 + (((uint)y) * srcStride);
-                    ColorRgb24* colorDst = color.Rows[y].Ptr;
+                    SizeInt32 size = colorBitmapLock.Size;
+                    int width = size.Width;
+                    int height = size.Height;
+                    nuint srcStride = (nuint)(uint)width * 3;
 
-                    for (int x = 0; x < width; x++)
+                    RegionPtr<ColorRgb24> color = new((ColorRgb24*)colorBitmapLock.Buffer,
+                                                      colorBitmapLock.Size,
+                                                      colorBitmapLock.BufferStride);
+
+                    for (int y = 0; y < height; y++)
                     {
-                        colorDst->R = src[0];
-                        colorDst->G = src[1];
-                        colorDst->B = src[2];
+                        byte* src = srcScan0 + ((srcRowOffset + (uint)y) * srcStride);
+                        ColorRgb24* colorDst = color.Rows[y].Ptr;
 
-                        src += 3;
-                        colorDst++;
+                        for (int x = 0; x < width; x++)
+                        {
+                            colorDst->R = src[0];
+                            colorDst->G = src[1];
+                            colorDst->B = src[2];
+
+                            src += 3;
+                            colorDst++;
+                        }
                     }
                 }
             }
@@ -450,41 +475,44 @@ namespace JpegXLFileTypePlugin.Interop
 
         private void SetRgbaImageData(byte* srcScan0, DecoderLayerData layerData)
         {
-            int width = Width;
-            int height = Height;
-
-            using (IBitmapLock colorBitmapLock = layerData.Color!.Lock(BitmapLockOptions.Write))
-            using (IBitmapLock transparencyBitmapLock = layerData.Transparency!.Lock(BitmapLockOptions.Write))
+            foreach (RectInt32 lockRect in BitmapUtil2.EnumerateLockRects(layerData.Color!))
             {
-                nuint srcStride = (nuint)(uint)width * 4;
-
-                RegionPtr<ColorRgb24> color = new((ColorRgb24*)colorBitmapLock.Buffer,
-                                                  colorBitmapLock.Size,
-                                                  colorBitmapLock.BufferStride);
-                RegionPtr<ColorAlpha8> transparency = new((ColorAlpha8*)transparencyBitmapLock.Buffer,
-                                                          transparencyBitmapLock.Size,
-                                                          transparencyBitmapLock.BufferStride);
-
-                for (int y = 0; y < height; y++)
+                uint srcRowOffset = (uint)lockRect.Top;
+                using (IBitmapLock colorBitmapLock = layerData.Color.Lock(lockRect, BitmapLockOptions.Write))
+                using (IBitmapLock transparencyBitmapLock = layerData.Transparency!.Lock(lockRect, BitmapLockOptions.Write))
                 {
-                    byte* src = srcScan0 + (((uint)y) * srcStride);
-                    ColorRgb24* colorDst = color.Rows[y].Ptr;
-                    ColorAlpha8* transparencyDst = transparency.Rows[y].Ptr;
+                    SizeInt32 size = colorBitmapLock.Size;
+                    int width = size.Width;
+                    int height = size.Height;
+                    nuint srcStride = (nuint)(uint)width * 4;
 
-                    for (int x = 0; x < width; x++)
+                    RegionPtr<ColorRgb24> color = new((ColorRgb24*)colorBitmapLock.Buffer,
+                                                      colorBitmapLock.Size,
+                                                      colorBitmapLock.BufferStride);
+                    RegionPtr<ColorAlpha8> transparency = new((ColorAlpha8*)transparencyBitmapLock.Buffer,
+                                                              transparencyBitmapLock.Size,
+                                                              transparencyBitmapLock.BufferStride);
+
+                    for (int y = 0; y < height; y++)
                     {
-                        colorDst->R = src[0];
-                        colorDst->G = src[1];
-                        colorDst->B = src[2];
-                        transparencyDst->A = src[3];
+                        byte* src = srcScan0 + ((srcRowOffset + (uint)y) * srcStride);
+                        ColorRgb24* colorDst = color.Rows[y].Ptr;
+                        ColorAlpha8* transparencyDst = transparency.Rows[y].Ptr;
 
-                        src += 4;
-                        colorDst++;
-                        transparencyDst++;
+                        for (int x = 0; x < width; x++)
+                        {
+                            colorDst->R = src[0];
+                            colorDst->G = src[1];
+                            colorDst->B = src[2];
+                            transparencyDst->A = src[3];
+
+                            src += 4;
+                            colorDst++;
+                            transparencyDst++;
+                        }
                     }
                 }
             }
         }
-
     }
 }

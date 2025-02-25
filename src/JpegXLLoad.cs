@@ -178,15 +178,13 @@ namespace JpegXLFileTypePlugin
 
         private static unsafe void SetLayerColorDataFromGrayImage(IBitmap color, Surface surface)
         {
-            using (IBitmapLock bitmapLock = color.Lock(BitmapLockOptions.Read))
+            CopyFromBitmapChunked(color, surface, (bitmapLock, destRegion) =>
             {
                 byte* srcScan0 = (byte*)bitmapLock.Buffer;
                 int srcStride = bitmapLock.BufferStride;
 
-                RegionPtr<ColorBgra32> destRegion = surface.AsRegionPtr().Cast<ColorBgra32>();
-
-                int width = surface.Width;
-                int height = surface.Height;
+                int width = destRegion.Width;
+                int height = destRegion.Height;
 
                 for (int y = 0; y < height; y++)
                 {
@@ -200,20 +198,18 @@ namespace JpegXLFileTypePlugin
                         dst++;
                     }
                 }
-            }
+            });
         }
 
         private static unsafe void SetLayerColorDataFromRgbImage(IBitmap color, Surface surface)
         {
-            using (IBitmapLock bitmapLock = color.Lock(BitmapLockOptions.Read))
+            CopyFromBitmapChunked(color, surface, (bitmapLock, destRegion) =>
             {
                 byte* srcScan0 = (byte*)bitmapLock.Buffer;
                 int srcStride = bitmapLock.BufferStride;
 
-                RegionPtr<ColorBgra32> destRegion = surface.AsRegionPtr().Cast<ColorBgra32>();
-
-                int width = surface.Width;
-                int height = surface.Height;
+                int width = destRegion.Width;
+                int height = destRegion.Height;
 
                 for (int y = 0; y < height; y++)
                 {
@@ -229,22 +225,22 @@ namespace JpegXLFileTypePlugin
                         dst++;
                     }
                 }
-            }
+            });
         }
 
         private static unsafe void SetLayerTransparency(IBitmap<ColorAlpha8> transparency, Surface surface)
         {
-            using (IBitmapLock<ColorAlpha8> bitmapLock = transparency.Lock(BitmapLockOptions.Read))
+            CopyFromBitmapChunked(transparency, surface, (bitmapLock, destRegion) =>
             {
-                RegionPtr<ColorAlpha8> sourceRegion = bitmapLock.AsRegionPtr();
-                RegionPtr<ColorBgra32> destRegion = surface.AsRegionPtr().Cast<ColorBgra32>();
+                byte* srcScan0 = (byte*)bitmapLock.Buffer;
+                int srcStride = bitmapLock.BufferStride;
 
-                int width = sourceRegion.Width;
-                int height = sourceRegion.Height;
+                int width = destRegion.Width;
+                int height = destRegion.Height;
 
                 for (int y = 0; y < height; y++)
                 {
-                    ColorAlpha8* src = sourceRegion.Rows[y].Ptr;
+                    ColorAlpha8* src = (ColorAlpha8*)(srcScan0 + ((long)y * srcStride));
                     ColorBgra32* dst = destRegion.Rows[y].Ptr;
 
                     for (int x = 0; x < width; x++)
@@ -253,6 +249,23 @@ namespace JpegXLFileTypePlugin
                         src++;
                         dst++;
                     }
+                }
+            });
+        }
+
+        private static unsafe void CopyFromBitmapChunked(IBitmap source,
+                                                         Surface destination,
+                                                         Action<IBitmapLock, RegionPtr<ColorBgra32>> copyAction)
+        {
+            RegionPtr<ColorBgra32> surfaceRegion = destination.AsRegionPtr().Cast<ColorBgra32>();
+
+            foreach (RectInt32 copyRect in BitmapUtil2.EnumerateLockRects(source))
+            {
+                RegionPtr<ColorBgra32> destRegion = surfaceRegion.Slice(copyRect);
+
+                using (IBitmapLock bitmapLock = source.Lock(copyRect, BitmapLockOptions.Read))
+                {
+                    copyAction(bitmapLock, destRegion);
                 }
             }
         }
