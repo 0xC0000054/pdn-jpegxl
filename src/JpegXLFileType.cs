@@ -10,7 +10,7 @@
 //
 ////////////////////////////////////////////////////////////////////////
 
-using JpegXLFileTypePlugin.Properties;
+using JpegXLFileTypePlugin.Localization;
 using PaintDotNet;
 using PaintDotNet.IndirectUI;
 using PaintDotNet.PropertySystem;
@@ -24,9 +24,9 @@ namespace JpegXLFileTypePlugin
     {
         private static readonly string[] FileExtensions = [".jxl"];
 
-#pragma warning disable IDE0060 // Remove unused parameter
+        private readonly IJpegXLStringResourceManager strings;
+
         public JpegXLFileType(IFileTypeHost host)
-#pragma warning restore IDE0060 // Remove unused parameter
             : base("JPEG XL", new FileTypeOptions
             {
                 LoadExtensions = FileExtensions,
@@ -35,6 +35,14 @@ namespace JpegXLFileTypePlugin
                 SupportsLayers = false
             })
         {
+            if (host != null)
+            {
+                strings = new PdnLocalizedStringResourceManager(host.Services.GetService<PaintDotNet.JpegXL.IJpegXLFileTypeStrings>()!);
+            }
+            else
+            {
+                strings = new BuiltinStringResourceManager();
+            }
         }
 
         private enum PropertyNames
@@ -74,20 +82,20 @@ namespace JpegXLFileTypePlugin
             ControlInfo info = CreateDefaultSaveConfigUI(props);
 
             PropertyControlInfo qualityPCI = info.FindControlForPropertyName(PropertyNames.Quality)!;
-            qualityPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = Resources.Quality_DisplayName;
+            qualityPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = GetString("Quality_DisplayName");
             qualityPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = string.Empty;
 
             PropertyControlInfo losslessPCI = info.FindControlForPropertyName(PropertyNames.Lossless)!;
             losslessPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = string.Empty;
-            losslessPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = Resources.Lossless_Description;
+            losslessPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = GetString("Lossless_Description");
 
             PropertyControlInfo encoderSpeedPCI = info.FindControlForPropertyName(PropertyNames.EncoderSpeed)!;
-            encoderSpeedPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = Resources.EncoderSpeed_DisplayName;
-            encoderSpeedPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = Resources.EncoderSpeed_Description;
+            encoderSpeedPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = GetString("EncoderSpeed_DisplayName");
+            encoderSpeedPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = GetString("EncoderSpeed_Description");
 
             PropertyControlInfo forumLinkPCI = info.FindControlForPropertyName(PropertyNames.ForumLink)!;
-            forumLinkPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = Resources.ForumLink_DisplayName;
-            forumLinkPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = Resources.ForumLink_Description;
+            forumLinkPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = GetString("ForumLink_DisplayName");
+            forumLinkPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = GetString("ForumLink_Description");
 
             PropertyControlInfo githubLinkPCI = info.FindControlForPropertyName(PropertyNames.GitHubLink)!;
             githubLinkPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = string.Empty;
@@ -122,6 +130,11 @@ namespace JpegXLFileTypePlugin
             int speed = token.GetProperty<Int32Property>(PropertyNames.EncoderSpeed)!.Value;
 
             JpegXLSave.Save(input, output, scratchSurface, progressCallback, quality, lossless, speed);
+        }
+
+        private string GetString(string name)
+        {
+            return strings.GetString(name);
         }
     }
 }
