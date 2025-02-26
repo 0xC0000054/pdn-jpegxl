@@ -10,7 +10,6 @@
 //
 ////////////////////////////////////////////////////////////////////////
 
-using PaintDotNet.Collections;
 using System;
 using System.Collections.Generic;
 
@@ -30,7 +29,7 @@ namespace JpegXLFileTypePlugin.Exif
             }
             else
             {
-                return items.ToArrayEx();
+                return [.. items];
             }
         }
     }
