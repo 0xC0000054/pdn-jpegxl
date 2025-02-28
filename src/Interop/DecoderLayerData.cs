@@ -33,8 +33,9 @@ namespace JpegXLFileTypePlugin.Interop
         {
             var colorPixelFormat = imageFormat switch
             {
-                JpegXLImageFormat.Gray => PixelFormats.Gray8,
-                JpegXLImageFormat.Rgb => PixelFormats.Rgb24,
+                // Gray images are loaded as RGB due to WIC having poor support for
+                // gray to RGB format conversions.
+                JpegXLImageFormat.Gray or JpegXLImageFormat.Rgb => PixelFormats.Rgb24,
                 JpegXLImageFormat.Cmyk => PixelFormats.Cmyk32,
                 _ => throw new InvalidEnumArgumentException(nameof(imageFormat), (int)imageFormat, typeof(JpegXLImageFormat)),
             };

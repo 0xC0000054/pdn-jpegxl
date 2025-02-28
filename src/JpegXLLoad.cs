@@ -68,7 +68,6 @@ namespace JpegXLFileTypePlugin
         private static void AddBackgroundLayer(DecoderImage decoderImage, Document doc, IImagingFactory imagingFactory)
         {
             DecoderLayerData layerData = decoderImage.LayerData ?? throw new FormatException("The layer data was null.");
-            JpegXLImageFormat format = decoderImage.Format;
 
             BitmapLayer bitmapLayer = Layer.CreateBackgroundLayer(decoderImage.Width, decoderImage.Height);
 
@@ -79,17 +78,22 @@ namespace JpegXLFileTypePlugin
 
             Surface surface = bitmapLayer.Surface;
 
-            if (format == JpegXLImageFormat.Rgb)
+            switch (decoderImage.Format)
             {
-                SetLayerColorDataFromRgbImage(layerData.Color, surface);
-            }
-            else
-            {
-                SetLayerColorDataFromConvertedImage(layerData.Color,
-                                                    decoderImage.TryGetColorContext(),
-                                                    format,
-                                                    surface,
-                                                    imagingFactory);
+                case JpegXLImageFormat.Cmyk:
+                    SetLayerColorDataFromCmykImage(layerData.Color,
+                                                   decoderImage.TryGetColorContext(),
+                                                   surface,
+                                                   imagingFactory);
+                    break;
+                case JpegXLImageFormat.Gray:
+                case JpegXLImageFormat.Rgb:
+                    // Gray images are loaded as RGB due to WIC having poor support for gray to RGB format conversions.
+                    // WIC was throwing an exception when trying to convert from a gray color profile to a RGB color profile.
+                    SetLayerColorDataFromRgbImage(layerData.Color, surface);
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unknown {nameof(JpegXLImageFormat)} value: {decoderImage.Format}.");
             }
 
             if (layerData.Transparency != null)
@@ -108,18 +112,16 @@ namespace JpegXLFileTypePlugin
         {
             JpegXLImageFormat format = decoderImage.Format;
 
-            if (format == JpegXLImageFormat.Rgb)
+            if (format == JpegXLImageFormat.Gray || format == JpegXLImageFormat.Rgb)
             {
+                // Gray images are loaded as RGB due to WIC having poor support for gray to RGB format conversions.
+                // WIC was throwing an exception when trying to convert from a gray color profile to a RGB color profile.
+                // The color profiles will always be RGB, even if the original image was gray.
+                // If the gray image has an ICC profile, it will be ignored.
+
                 IColorContext? colorContext = decoderImage.TryGetColorContext();
 
                 if (colorContext != null)
-                {
-                    doc.SetColorContext(colorContext);
-                }
-            }
-            else if (format == JpegXLImageFormat.Gray)
-            {
-                using (IColorContext colorContext = imagingFactory.CreateColorContext(PaintDotNet.Direct2D1.DeviceColorSpace.Srgb))
                 {
                     doc.SetColorContext(colorContext);
                 }
@@ -135,22 +137,16 @@ namespace JpegXLFileTypePlugin
             }
         }
 
-        private static unsafe void SetLayerColorDataFromConvertedImage(IBitmap color,
-                                                                       IColorContext? sourceColorContext,
-                                                                       JpegXLImageFormat format,
-                                                                       Surface surface,
-                                                                       IImagingFactory imagingFactory)
+        private static unsafe void SetLayerColorDataFromCmykImage(IBitmap color,
+                                                                  IColorContext? sourceColorContext,
+                                                                  Surface surface,
+                                                                  IImagingFactory imagingFactory)
         {
             if (sourceColorContext != null)
             {
-                PaintDotNet.Imaging.ExifColorSpace dstColorSpace = PaintDotNet.Imaging.ExifColorSpace.Srgb;
-
-                if (format == JpegXLImageFormat.Cmyk)
-                {
-                    // https://discord.com/channels/143867839282020352/960223751599976479/1167941100976222360
-                    // Clinton Ingram (saucecontrol) recommends using Adobe RGB for CMYK data that is converted to RGB.
-                    dstColorSpace = PaintDotNet.Imaging.ExifColorSpace.AdobeRgb;
-                }
+                // https://discord.com/channels/143867839282020352/960223751599976479/1167941100976222360
+                // Clinton Ingram (saucecontrol) recommends using Adobe RGB for CMYK data that is converted to RGB.
+                PaintDotNet.Imaging.ExifColorSpace dstColorSpace = PaintDotNet.Imaging.ExifColorSpace.AdobeRgb;
 
                 using (IColorContext dstColorContext = imagingFactory.CreateColorContext(dstColorSpace))
                 using (IBitmapSource<ColorRgb24> convertedBitmapSource = imagingFactory.CreateColorTransformedBitmap<ColorRgb24>(color,
@@ -165,14 +161,7 @@ namespace JpegXLFileTypePlugin
             }
             else
             {
-                if (format == JpegXLImageFormat.Gray)
-                {
-                    SetLayerColorDataFromGrayImage(color, surface);
-                }
-                else if (format == JpegXLImageFormat.Cmyk)
-                {
-                    throw new FormatException("A CMYK image must have a valid ICC profile.");
-                }
+                throw new FormatException("A CMYK image must have a valid ICC profile.");
             }
         }
 
