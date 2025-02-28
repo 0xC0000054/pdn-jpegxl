@@ -144,6 +144,8 @@ namespace JpegXLFileTypePlugin.Interop
                     {
                         KnownColorProfile.LinearGray => $"{nameof(JpegXLFileTypePlugin)}.ColorProfiles.Gray-elle-V4-g10.icc",
                         KnownColorProfile.GraySrgbTRC => $"{nameof(JpegXLFileTypePlugin)}.ColorProfiles.Gray-elle-V4-srgbtrc.icc",
+                        KnownColorProfile.Rec2020Linear => $"{nameof(JpegXLFileTypePlugin)}.ColorProfiles.Rec2020-elle-V4-g10.icc",
+                        KnownColorProfile.Rec709 => $"{nameof(JpegXLFileTypePlugin)}.ColorProfiles.Rec709-elle-V4-rec709.icc",
                         _ => throw new InvalidEnumArgumentException(nameof(profile), (int)profile, typeof(KnownColorProfile)),
                     };
 

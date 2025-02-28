@@ -19,5 +19,7 @@ namespace JpegXLFileTypePlugin.Interop
         LinearGray,
         GraySrgbTRC,
         DisplayP3,
+        Rec709,
+        Rec2020Linear,
     }
 }

@@ -50,6 +50,11 @@ namespace
                     {
                         status = SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::LinearSrgb);
                     }
+                    else if (colorEncoding.primaries == JXL_PRIMARIES_2100)
+                    {
+                        // Rec. 2020 and Rec. 2100 use the same primaries.
+                        status = SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::Rec2020Linear);
+                    }
                 }
                 else if (colorEncoding.transfer_function == JXL_TRANSFER_FUNCTION_SRGB)
                 {
@@ -60,6 +65,14 @@ namespace
                     else if (colorEncoding.primaries == JXL_PRIMARIES_P3)
                     {
                         status = SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::DisplayP3);
+                    }
+                }
+                else if (colorEncoding.transfer_function == JXL_TRANSFER_FUNCTION_709)
+                {
+                    // SRGB and Rec. 709 use the same primaries.
+                    if (colorEncoding.primaries == JXL_PRIMARIES_SRGB)
+                    {
+                        status = SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::Rec709);
                     }
                 }
             }

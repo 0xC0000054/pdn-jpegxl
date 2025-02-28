@@ -28,11 +28,15 @@
   <ItemGroup>
     <None Remove="ColorProfiles\Gray-elle-V4-g10.icc" />
     <None Remove="ColorProfiles\Gray-elle-V4-srgbtrc.icc" />
+    <None Remove="ColorProfiles\Rec2020-elle-V4-g10.icc" />
+    <None Remove="ColorProfiles\Rec709-elle-V4-rec709.icc" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="ColorProfiles\Gray-elle-V4-g10.icc" />
     <EmbeddedResource Include="ColorProfiles\Gray-elle-V4-srgbtrc.icc" />
+    <EmbeddedResource Include="ColorProfiles\Rec2020-elle-V4-g10.icc" />
+    <EmbeddedResource Include="ColorProfiles\Rec709-elle-V4-rec709.icc" />
   </ItemGroup>
 
   <ItemGroup>

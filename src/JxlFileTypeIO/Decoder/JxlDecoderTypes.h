@@ -45,6 +45,8 @@ enum class KnownColorProfile : int32_t
     LinearGray,
     GraySrgbTRC,
     DisplayP3,
+    Rec709,
+    Rec2020Linear,
 };
 
 typedef void(__stdcall* DecoderSetBasicInfo)(
