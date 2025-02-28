@@ -11,6 +11,7 @@
 ////////////////////////////////////////////////////////////////////////
 
 #include "JxlDecoder.h"
+#include "jxl/cms.h"
 #include "jxl/decode_cxx.h"
 #include "jxl/resizable_parallel_runner_cxx.h"
 #include <algorithm>
@@ -292,6 +293,79 @@ namespace
             }
             else if (status == JXL_DEC_COLOR_ENCODING)
             {
+                // An image can have two different color profiles.
+                // 1. The target data color profile.
+                // 2. The original color profile for XYB images.
+
+                JxlColorEncoding originalEncodedProfile{};
+
+                if (JxlDecoderGetColorAsEncodedProfile(
+                    dec,
+                    JXL_COLOR_PROFILE_TARGET_ORIGINAL,
+                    &originalEncodedProfile) == JXL_DEC_SUCCESS)
+                {
+                    // The original profile is a libjxl encoded profile.
+
+                    if (JxlDecoderSetPreferredColorProfile(dec, &originalEncodedProfile) == JXL_DEC_SUCCESS)
+                    {
+                        JxlColorEncoding asTargetData{};
+
+                        if (JxlDecoderGetColorAsEncodedProfile(
+                            dec,
+                            JXL_COLOR_PROFILE_TARGET_DATA,
+                            &asTargetData) != JXL_DEC_SUCCESS)
+                        {
+                            // If the original profile cannot be used for the output, we fall back to sRGB/sGray for the XYB conversion.
+                            JxlColorEncoding fallbackProfile{};
+                            fallbackProfile.color_space = decoderImageFormat == DecoderImageFormat::Gray ? JXL_COLOR_SPACE_GRAY : JXL_COLOR_SPACE_RGB;
+                            fallbackProfile.primaries = JXL_PRIMARIES_SRGB;
+                            fallbackProfile.transfer_function = JXL_TRANSFER_FUNCTION_SRGB;
+                            fallbackProfile.white_point = JXL_WHITE_POINT_D65;
+                            fallbackProfile.rendering_intent = JXL_RENDERING_INTENT_PERCEPTUAL;
+
+                            if (JxlDecoderSetPreferredColorProfile(dec, &fallbackProfile) != JXL_DEC_SUCCESS)
+                            {
+                                SetErrorMessage(errorInfo, "JxlDecoderSetPreferredColorProfile failed for the fall back profile.");
+                                return DecoderStatus::DecodeError;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    size_t iccProfileSize = 0;
+
+                    if (JxlDecoderGetICCProfileSize(
+                        dec,
+                        JXL_COLOR_PROFILE_TARGET_ORIGINAL,
+                        &iccProfileSize) == JXL_DEC_SUCCESS)
+                    {
+                        // The original profile is an ICC profile.
+                        if (iccProfileSize > 0)
+                        {
+                            std::vector<uint8_t> iccProfileBuffer(iccProfileSize);
+
+                            if (JxlDecoderGetColorAsICCProfile(
+                                dec,
+                                JXL_COLOR_PROFILE_TARGET_ORIGINAL,
+                                iccProfileBuffer.data(),
+                                iccProfileSize) == JXL_DEC_SUCCESS)
+                            {
+                                if (JxlDecoderSetCms(dec, *JxlGetDefaultCms()) == JXL_DEC_SUCCESS)
+                                {
+                                    // Instruct libjxl to convert the image to the original color
+                                    // profile as part of the decoding process.
+                                    JxlDecoderSetOutputColorProfile(
+                                        dec,
+                                        nullptr,
+                                        iccProfileBuffer.data(),
+                                        iccProfileSize);
+                                }
+                            }
+                        }
+                    }
+                }
+
                 SetProfileFromEncodingStatus encodedProfileStatus = SetProfileFromEncodingStatus::UnsupportedColorEncoding;
 
                 JxlColorEncoding colorEncoding{};
