@@ -64,7 +64,6 @@ namespace JpegXLFileTypePlugin
             return doc;
         }
 
-
         private static void AddBackgroundLayer(DecoderImage decoderImage, Document doc, IImagingFactory imagingFactory)
         {
             DecoderLayerData layerData = decoderImage.LayerData ?? throw new FormatException("The layer data was null.");
@@ -163,31 +162,6 @@ namespace JpegXLFileTypePlugin
             {
                 throw new FormatException("A CMYK image must have a valid ICC profile.");
             }
-        }
-
-        private static unsafe void SetLayerColorDataFromGrayImage(IBitmap color, Surface surface)
-        {
-            CopyFromBitmapChunked(color, surface, (bitmapLock, destRegion) =>
-            {
-                byte* srcScan0 = (byte*)bitmapLock.Buffer;
-                int srcStride = bitmapLock.BufferStride;
-
-                int width = destRegion.Width;
-                int height = destRegion.Height;
-
-                for (int y = 0; y < height; y++)
-                {
-                    byte* src = srcScan0 + ((long)y * srcStride);
-                    ColorBgra32* dst = destRegion.Rows[y].Ptr;
-
-                    for (int x = 0; x < width; x++)
-                    {
-                        dst->R = dst->G = dst->B = *src;
-                        src++;
-                        dst++;
-                    }
-                }
-            });
         }
 
         private static unsafe void SetLayerColorDataFromRgbImage(IBitmap color, Surface surface)
