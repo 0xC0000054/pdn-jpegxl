@@ -221,24 +221,11 @@ namespace JpegXLFileTypePlugin
         {
             CopyFromBitmapChunked(transparency, surface, (bitmapLock, destRegion) =>
             {
-                byte* srcScan0 = (byte*)bitmapLock.Buffer;
-                int srcStride = bitmapLock.BufferStride;
+                RegionPtr<byte> source = new((byte*)bitmapLock.Buffer,
+                                             bitmapLock.Size,
+                                             bitmapLock.BufferStride);
 
-                int width = destRegion.Width;
-                int height = destRegion.Height;
-
-                for (int y = 0; y < height; y++)
-                {
-                    ColorAlpha8* src = (ColorAlpha8*)(srcScan0 + ((long)y * srcStride));
-                    ColorBgra32* dst = destRegion.Rows[y].Ptr;
-
-                    for (int x = 0; x < width; x++)
-                    {
-                        dst->A = src->A;
-                        src++;
-                        dst++;
-                    }
-                }
+                PixelKernels.ReplaceChannel(destRegion, source, 3);
             });
         }
 
