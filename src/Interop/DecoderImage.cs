@@ -157,7 +157,7 @@ namespace JpegXLFileTypePlugin.Interop
                         byte[] bytes = new byte[checked((int)stream.Length)];
                         stream.ReadExactly(bytes);
 
-                        imagingFactory!.CreateColorContext(bytes);
+                        colorContext = imagingFactory!.CreateColorContext(bytes);
                     }
                 }
             }
