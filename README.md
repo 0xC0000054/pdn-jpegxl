@@ -2,6 +2,11 @@
 
 A [Paint.NET](http://www.getpaint.net) filetype plugin that loads and saves JPEG XL images using [libjxl](https://github.com/libjxl/libjxl).
 
+### This plugin is bundled with Paint.NET 5.1.5 and later.
+
+If you need the features from a newer version you can still install the plugin.
+The plugin will override the bundled version if it has higher version number.
+
 ## Installation
 
 1. Close Paint.NET.
