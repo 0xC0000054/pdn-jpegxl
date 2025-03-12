@@ -16,7 +16,7 @@ namespace JpegXLFileTypePlugin.Interop
 {
     internal static partial class JpegXL_Arm64
     {
-        private const string DllName = "JpegXLFileType_ARM64.dll";
+        private const string DllName = "JpegXLFileTypeIO_ARM64.dll";
 
         [LibraryImport(DllName)]
         [UnmanagedCallConv(CallConvs = new System.Type[] { typeof(System.Runtime.CompilerServices.CallConvStdcall) })]
