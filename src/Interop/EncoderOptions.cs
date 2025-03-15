@@ -18,15 +18,15 @@ namespace JpegXLFileTypePlugin.Interop
     internal sealed partial class EncoderOptions
     {
         public readonly float distance;
-        public readonly int speed;
+        public readonly int effort;
         public readonly bool lossless;
 
-        public EncoderOptions(int quality, bool lossless, int encoderSpeed)
+        public EncoderOptions(int quality, bool lossless, int effort)
         {
             // Lossless encoding implies a distance value of 0.0, anything higher than that
             // will use lossy encoding.
             distance = lossless ? 0.0f : QualityToDistanceLookupTable.GetValue(quality);
-            speed = encoderSpeed;
+            this.effort = effort;
             this.lossless = lossless;
         }
     }

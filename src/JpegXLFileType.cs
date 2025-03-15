@@ -49,7 +49,7 @@ namespace JpegXLFileTypePlugin
         {
             Quality,
             Lossless,
-            EncoderSpeed,
+            Effort,
             ForumLink,
             GitHubLink,
             PluginVersion,
@@ -62,7 +62,7 @@ namespace JpegXLFileTypePlugin
             [
                 new Int32Property(PropertyNames.Quality, 90, 0, 100),
                 new BooleanProperty(PropertyNames.Lossless, false),
-                new Int32Property(PropertyNames.EncoderSpeed, 7, 1, 9),
+                new Int32Property(PropertyNames.Effort, 7, 1, 9),
                 new UriProperty(PropertyNames.ForumLink, new Uri("https://forums.getpaint.net/topic/120716-jpeg-xl-filetype")),
                 new UriProperty (PropertyNames.GitHubLink, new Uri("https://github.com/0xC0000054/pdn-jpegxl")),
                 new StringProperty(PropertyNames.PluginVersion),
@@ -89,9 +89,9 @@ namespace JpegXLFileTypePlugin
             losslessPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = string.Empty;
             losslessPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = GetString("Lossless_Description");
 
-            PropertyControlInfo encoderSpeedPCI = info.FindControlForPropertyName(PropertyNames.EncoderSpeed)!;
-            encoderSpeedPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = GetString("EncoderSpeed_DisplayName");
-            encoderSpeedPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = GetString("EncoderSpeed_Description");
+            PropertyControlInfo effortPCI = info.FindControlForPropertyName(PropertyNames.Effort)!;
+            effortPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = GetString("Effort_DisplayName");
+            effortPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = GetString("Effort_Description");
 
             PropertyControlInfo forumLinkPCI = info.FindControlForPropertyName(PropertyNames.ForumLink)!;
             forumLinkPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = GetString("ForumLink_DisplayName");
@@ -127,9 +127,9 @@ namespace JpegXLFileTypePlugin
         {
             int quality = token.GetProperty<Int32Property>(PropertyNames.Quality)!.Value;
             bool lossless = token.GetProperty<BooleanProperty>(PropertyNames.Lossless)!.Value;
-            int speed = token.GetProperty<Int32Property>(PropertyNames.EncoderSpeed)!.Value;
+            int effort = token.GetProperty<Int32Property>(PropertyNames.Effort)!.Value;
 
-            JpegXLSave.Save(input, output, scratchSurface, progressCallback, quality, lossless, speed);
+            JpegXLSave.Save(input, output, scratchSurface, progressCallback, quality, lossless, effort);
         }
 
         private string GetString(string name)

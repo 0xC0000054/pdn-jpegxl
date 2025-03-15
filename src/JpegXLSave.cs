@@ -33,7 +33,7 @@ namespace JpegXLFileTypePlugin
                                        ProgressEventHandler progressEventHandler,
                                        int quality,
                                        bool lossless,
-                                       int speed)
+                                       int effort)
         {
             scratchSurface.Clear();
             input.CreateRenderer().Render(scratchSurface);
@@ -56,7 +56,7 @@ namespace JpegXLFileTypePlugin
                 });
             }
 
-            EncoderOptions options = new(quality, lossless, speed);
+            EncoderOptions options = new(quality, lossless, effort);
             EncoderImageMetadata metadata = CreateImageMetadata(input);
 
             JpegXLNative.SaveImage(scratchSurface, options, metadata, progressCallback, output);

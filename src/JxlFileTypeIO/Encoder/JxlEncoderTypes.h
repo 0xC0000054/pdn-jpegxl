@@ -27,7 +27,7 @@ enum class EncoderStatus : int32_t
 struct EncoderOptions
 {
     float distance;
-    int32_t speed;
+    int32_t effort;
     bool lossless;
 };
 

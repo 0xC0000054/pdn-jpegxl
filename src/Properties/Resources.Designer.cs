@@ -63,18 +63,18 @@ namespace JpegXLFileTypePlugin.Properties {
         /// <summary>
         ///   Looks up a localized string similar to Lower values are faster, but may reduce image quality..
         /// </summary>
-        internal static string EncoderSpeed_Description {
+        internal static string Effort_Description {
             get {
-                return ResourceManager.GetString("EncoderSpeed_Description", resourceCulture);
+                return ResourceManager.GetString("Effort_Description", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Encoder Speed.
+        ///   Looks up a localized string similar to Effort.
         /// </summary>
-        internal static string EncoderSpeed_DisplayName {
+        internal static string Effort_DisplayName {
             get {
-                return ResourceManager.GetString("EncoderSpeed_DisplayName", resourceCulture);
+                return ResourceManager.GetString("Effort_DisplayName", resourceCulture);
             }
         }
         

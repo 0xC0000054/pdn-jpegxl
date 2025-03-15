@@ -22,7 +22,7 @@ namespace JpegXLFileTypePlugin.Interop
             public struct Native
             {
                 public float distance;
-                public int speed;
+                public int effort;
                 public byte lossless;
             }
 
@@ -31,7 +31,7 @@ namespace JpegXLFileTypePlugin.Interop
                 return new()
                 {
                     distance = managed.distance,
-                    speed = managed.speed,
+                    effort = managed.effort,
                     lossless = (byte)(managed.lossless ? 1 : 0)
                 };
             }

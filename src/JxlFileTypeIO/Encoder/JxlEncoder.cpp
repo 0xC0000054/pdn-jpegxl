@@ -328,7 +328,7 @@ EncoderStatus EncoderWriteImage(
             return EncoderStatus::EncodeError;
         }
 
-        if (JxlEncoderFrameSettingsSetOption(frameSettings, JXL_ENC_FRAME_SETTING_EFFORT, options->speed) != JXL_ENC_SUCCESS)
+        if (JxlEncoderFrameSettingsSetOption(frameSettings, JXL_ENC_FRAME_SETTING_EFFORT, options->effort) != JXL_ENC_SUCCESS)
         {
             SetErrorMessage(errorInfo, "JxlEncoderOptionsSetEffort failed.");
             return EncoderStatus::EncodeError;
