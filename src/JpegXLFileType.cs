@@ -106,10 +106,10 @@ namespace JpegXLFileTypePlugin
             pluginVersionPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = string.Empty;
             pluginVersionPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = "JpegXLFileType v" + VersionInfo.PluginVersion;
 
-            PropertyControlInfo libwebpVersionPCI = info.FindControlForPropertyName(PropertyNames.LibJxlVersion)!;
-            libwebpVersionPCI.ControlType.Value = PropertyControlType.Label;
-            libwebpVersionPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = string.Empty;
-            libwebpVersionPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = "libjxl v" + VersionInfo.LibJxlVersion;
+            PropertyControlInfo libjxlVersionPCI = info.FindControlForPropertyName(PropertyNames.LibJxlVersion)!;
+            libjxlVersionPCI.ControlType.Value = PropertyControlType.Label;
+            libjxlVersionPCI.ControlProperties[ControlInfoPropertyNames.DisplayName]!.Value = string.Empty;
+            libjxlVersionPCI.ControlProperties[ControlInfoPropertyNames.Description]!.Value = "libjxl v" + VersionInfo.LibJxlVersion;
 
             return info;
         }
