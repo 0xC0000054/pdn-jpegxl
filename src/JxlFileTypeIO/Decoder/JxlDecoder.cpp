@@ -11,9 +11,8 @@
 ////////////////////////////////////////////////////////////////////////
 
 #include "JxlDecoder.h"
+#include "DecoderContext.h"
 #include "jxl/cms.h"
-#include "jxl/decode_cxx.h"
-#include "jxl/resizable_parallel_runner_cxx.h"
 #include <algorithm>
 #include <stdexcept>
 #include <vector>
@@ -111,15 +110,15 @@ namespace
     bool ExtraChannelsAreSupported(
         const JxlDecoder* dec,
         const JxlBasicInfo& info,
-        size_t& cmykBlackChannelIndex)
+        uint32_t& cmykBlackChannelIndex)
     {
-        cmykBlackChannelIndex = std::numeric_limits<size_t>::max();
+        cmykBlackChannelIndex = std::numeric_limits<uint32_t>::max();
 
         const bool hasTransparency = info.alpha_bits != 0;
         const uint32_t extraChannelCount = info.num_extra_channels;
         bool foundFirstAlphaChannel = false;
 
-        for (size_t i = 0; i < extraChannelCount; i++)
+        for (uint32_t i = 0; i < extraChannelCount; i++)
         {
             JxlExtraChannelInfo extraChannelInfo{};
 
@@ -130,7 +129,7 @@ namespace
 
             if (extraChannelInfo.type == JXL_CHANNEL_BLACK)
             {
-                if (cmykBlackChannelIndex == std::numeric_limits<size_t>::max())
+                if (cmykBlackChannelIndex == std::numeric_limits<uint32_t>::max())
                 {
                     cmykBlackChannelIndex = i;
                 }
@@ -217,24 +216,13 @@ namespace
 
     DecoderStatus ReadFrameData(
         DecoderCallbacks* callbacks,
-        JxlDecoder* dec,
+        const DecoderContext& context,
         ErrorInfo* errorInfo)
     {
-        auto runner = JxlResizableParallelRunnerMake(nullptr);
-
-        if (JxlDecoderSetParallelRunner(
-            dec,
-            JxlResizableParallelRunner,
-            runner.get()) != JXL_DEC_SUCCESS)
-        {
-            SetErrorMessage(errorInfo, "JxlDecoderSetParallelRunner failed.");
-            return DecoderStatus::DecodeError;
-        }
+        context.SetResizableParallelRunner();
 
         if (JxlDecoderSubscribeEvents(
-            dec,
-            JXL_DEC_BASIC_INFO |
-            JXL_DEC_COLOR_ENCODING |
+            context.GetDecoder(),
             JXL_DEC_FRAME |
             JXL_DEC_FULL_IMAGE) != JXL_DEC_SUCCESS)
         {
@@ -242,257 +230,37 @@ namespace
             return DecoderStatus::DecodeError;
         }
 
-        if (JxlDecoderSetUnpremultiplyAlpha(dec, JXL_TRUE) != JXL_DEC_SUCCESS)
+        if (JxlDecoderSetUnpremultiplyAlpha(context.GetDecoder(), JXL_TRUE) != JXL_DEC_SUCCESS)
         {
             SetErrorMessage(errorInfo, "JxlDecoderSetUnpremultiplyAlpha failed.");
             return DecoderStatus::DecodeError;
         }
 
-        JxlBasicInfo basicInfo{};
-        JxlPixelFormat format{ 4, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0 };
         std::vector<uint8_t> imageOutBuffer;
-        std::vector<uint8_t> iccProfileBuffer;
 
-        DecoderImageFormat decoderImageFormat{};
         std::vector<char> layerNameBuffer;
-        size_t cmykBlackChannelIndex = std::numeric_limits<size_t>::max();
         std::vector<uint8_t> cmykBlackChannelBuffer;
 
         JxlDecoderStatus status = JXL_DEC_ERROR;
 
+        auto& basicInfo = context.GetBasicInfo();
+        auto& format = context.GetPixelFormat();
+        auto decoderImageFormat = context.GetDecoderImageFormat();
+
         do
         {
-            status = JxlDecoderProcessInput(dec);
+            status = JxlDecoderProcessInput(context.GetDecoder());
 
             if (status == JXL_DEC_ERROR)
             {
                 SetErrorMessage(errorInfo, "JxlDecoderProcessInput failed.");
                 return DecoderStatus::DecodeError;
             }
-            else if (status == JXL_DEC_BASIC_INFO)
-            {
-                if (JxlDecoderGetBasicInfo(dec, &basicInfo) != JXL_DEC_SUCCESS)
-                {
-                    SetErrorMessage(errorInfo, "JxlDecoderGetBasicInfo failed.");
-                    return DecoderStatus::DecodeError;
-                }
-
-                const uint32_t width = basicInfo.xsize;
-                const uint32_t height = basicInfo.ysize;
-                const uint32_t colorChannelCount = basicInfo.num_color_channels;
-                const uint32_t extraChannelCount = basicInfo.num_extra_channels;
-                const bool hasTransparency = basicInfo.alpha_bits != 0;
-
-                if (width > static_cast<uint32_t>(std::numeric_limits<int32_t>::max()) ||
-                    height > static_cast<uint32_t>(std::numeric_limits<int32_t>::max()))
-                {
-                    return DecoderStatus::ImageDimensionExceedsInt32;
-                }
-
-                if (colorChannelCount != 1 && colorChannelCount != 3
-                    || !ExtraChannelsAreSupported(dec, basicInfo, cmykBlackChannelIndex))
-                {
-                    // The format is not CMYK, Gray, or RGB with optional transparency.
-                    return DecoderStatus::UnsupportedChannelFormat;
-                }
-
-                format.num_channels = colorChannelCount + (hasTransparency ? 1 : 0);
-
-                if (colorChannelCount == 1)
-                {
-                    decoderImageFormat = DecoderImageFormat::Gray;
-                }
-                else if (cmykBlackChannelIndex != std::numeric_limits<size_t>::max())
-                {
-                    decoderImageFormat = DecoderImageFormat::Cmyk;
-                }
-                else
-                {
-                    decoderImageFormat = DecoderImageFormat::Rgb;
-                }
-
-                ImageChannelRepresentation channelRepresentation = ImageChannelRepresentation::Uint8;
-
-                if (basicInfo.exponent_bits_per_sample > 0)
-                {
-                    if (decoderImageFormat == DecoderImageFormat::Cmyk)
-                    {
-                        // WIC cannot represent this CMYK format.
-                        SetErrorMessage(errorInfo, "Floating point CMYK images are not supported.");
-                        return DecoderStatus::DecodeError;
-                    }
-                    else if (basicInfo.bits_per_sample <= 16)
-                    {
-                        format.data_type = JXL_TYPE_FLOAT16;
-                        channelRepresentation = ImageChannelRepresentation::Float16;
-                    }
-                    else if (basicInfo.bits_per_sample <= 32)
-                    {
-                        format.data_type = JXL_TYPE_FLOAT;
-                        channelRepresentation = ImageChannelRepresentation::Float32;
-                    }
-                    else
-                    {
-                        SetErrorMessageFormat(errorInfo, "Unsupported floating point bit depth: %u.", basicInfo.bits_per_sample);
-                        return DecoderStatus::DecodeError;
-                    }
-                }
-                else if (basicInfo.bits_per_sample > 8)
-                {
-                    if (basicInfo.bits_per_sample <= 16)
-                    {
-                        if (decoderImageFormat == DecoderImageFormat::Cmyk)
-                        {
-                            // WIC throws an InvalidColorProfileException for the CMYK64 test image
-                            // I was using, the same profile works for a CMYK32 image.
-                            SetErrorMessage(errorInfo, "CMYK64 images are not supported.");
-                            return DecoderStatus::DecodeError;
-                        }
-
-                        format.data_type = JXL_TYPE_UINT16;
-                        channelRepresentation = ImageChannelRepresentation::Uint16;
-                    }
-                    else
-                    {
-                        SetErrorMessageFormat(errorInfo, "Unsupported integer bit depth: %u.", basicInfo.bits_per_sample);
-                        return DecoderStatus::DecodeError;
-                    }
-                }
-
-                callbacks->setBasicInfo(width, height, decoderImageFormat, channelRepresentation, hasTransparency);
-
-                uint32_t suggestedThreads = JxlResizableParallelRunnerSuggestThreads(basicInfo.xsize, basicInfo.ysize);
-                JxlResizableParallelRunnerSetThreads(runner.get(), suggestedThreads);
-            }
-            else if (status == JXL_DEC_COLOR_ENCODING)
-            {
-                // An image can have two different color profiles.
-                // 1. The target data color profile.
-                // 2. The original color profile for XYB images.
-
-                JxlColorEncoding originalEncodedProfile{};
-
-                if (JxlDecoderGetColorAsEncodedProfile(
-                    dec,
-                    JXL_COLOR_PROFILE_TARGET_ORIGINAL,
-                    &originalEncodedProfile) == JXL_DEC_SUCCESS)
-                {
-                    // The original profile is a libjxl encoded profile.
-
-                    if (JxlDecoderSetPreferredColorProfile(dec, &originalEncodedProfile) == JXL_DEC_SUCCESS)
-                    {
-                        JxlColorEncoding asTargetData{};
-
-                        if (JxlDecoderGetColorAsEncodedProfile(
-                            dec,
-                            JXL_COLOR_PROFILE_TARGET_DATA,
-                            &asTargetData) != JXL_DEC_SUCCESS)
-                        {
-                            // If the original profile cannot be used for the output, we fall back to sRGB/sGray for the XYB conversion.
-                            JxlColorEncoding fallbackProfile{};
-                            fallbackProfile.color_space = decoderImageFormat == DecoderImageFormat::Gray ? JXL_COLOR_SPACE_GRAY : JXL_COLOR_SPACE_RGB;
-                            fallbackProfile.primaries = JXL_PRIMARIES_SRGB;
-                            fallbackProfile.transfer_function = JXL_TRANSFER_FUNCTION_SRGB;
-                            fallbackProfile.white_point = JXL_WHITE_POINT_D65;
-                            fallbackProfile.rendering_intent = JXL_RENDERING_INTENT_PERCEPTUAL;
-
-                            if (JxlDecoderSetPreferredColorProfile(dec, &fallbackProfile) != JXL_DEC_SUCCESS)
-                            {
-                                SetErrorMessage(errorInfo, "JxlDecoderSetPreferredColorProfile failed for the fall back profile.");
-                                return DecoderStatus::DecodeError;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    size_t iccProfileSize = 0;
-
-                    if (JxlDecoderGetICCProfileSize(
-                        dec,
-                        JXL_COLOR_PROFILE_TARGET_ORIGINAL,
-                        &iccProfileSize) == JXL_DEC_SUCCESS)
-                    {
-                        // The original profile is an ICC profile.
-                        if (iccProfileSize > 0)
-                        {
-                            std::vector<uint8_t> iccProfileBuffer(iccProfileSize);
-
-                            if (JxlDecoderGetColorAsICCProfile(
-                                dec,
-                                JXL_COLOR_PROFILE_TARGET_ORIGINAL,
-                                iccProfileBuffer.data(),
-                                iccProfileSize) == JXL_DEC_SUCCESS)
-                            {
-                                if (JxlDecoderSetCms(dec, *JxlGetDefaultCms()) == JXL_DEC_SUCCESS)
-                                {
-                                    // Instruct libjxl to convert the image to the original color
-                                    // profile as part of the decoding process.
-                                    JxlDecoderSetOutputColorProfile(
-                                        dec,
-                                        nullptr,
-                                        iccProfileBuffer.data(),
-                                        iccProfileSize);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                SetProfileFromEncodingStatus encodedProfileStatus = SetProfileFromEncodingStatus::UnsupportedColorEncoding;
-
-                JxlColorEncoding colorEncoding{};
-
-                if (JxlDecoderGetColorAsEncodedProfile(
-                    dec,
-                    JXL_COLOR_PROFILE_TARGET_DATA,
-                    &colorEncoding) == JXL_DEC_SUCCESS)
-                {
-                    encodedProfileStatus = SetProfileFromColorEncoding(callbacks, colorEncoding);
-
-                    if (encodedProfileStatus == SetProfileFromEncodingStatus::Error)
-                    {
-                        return DecoderStatus::CreateMetadataError;
-                    }
-                }
-
-                if (encodedProfileStatus == SetProfileFromEncodingStatus::UnsupportedColorEncoding)
-                {
-                    size_t iccProfileSize = 0;
-
-                    if (JxlDecoderGetICCProfileSize(
-                        dec,
-                        JXL_COLOR_PROFILE_TARGET_DATA,
-                        &iccProfileSize) == JXL_DEC_SUCCESS)
-                    {
-                        if (iccProfileSize > 0)
-                        {
-                            iccProfileBuffer.resize(iccProfileSize);
-
-                            if (JxlDecoderGetColorAsICCProfile(
-                                dec,
-                                JXL_COLOR_PROFILE_TARGET_DATA,
-                                iccProfileBuffer.data(),
-                                iccProfileSize) != JXL_DEC_SUCCESS)
-                            {
-                                return DecoderStatus::MetadataError;
-                            }
-
-                            if (!callbacks->setIccProfile(
-                                iccProfileBuffer.data(),
-                                iccProfileBuffer.size()))
-                            {
-                                return DecoderStatus::CreateMetadataError;
-                            }
-                        }
-                    }
-                }
-            }
             else if (status == JXL_DEC_FRAME)
             {
                 JxlFrameHeader frameHeader{};
 
-                if (JxlDecoderGetFrameHeader(dec, &frameHeader) != JXL_DEC_SUCCESS)
+                if (JxlDecoderGetFrameHeader(context.GetDecoder(), &frameHeader) != JXL_DEC_SUCCESS)
                 {
                     SetErrorMessage(errorInfo, "JxlDecoderGetFrameHeader failed.");
                     return DecoderStatus::DecodeError;
@@ -506,7 +274,7 @@ namespace
                     layerNameBuffer.resize(static_cast<size_t>(frameHeader.name_length) + 1);
 
                     if (JxlDecoderGetFrameName(
-                        dec,
+                        context.GetDecoder(),
                         layerNameBuffer.data(),
                         layerNameBuffer.size()) != JXL_DEC_SUCCESS)
                     {
@@ -545,7 +313,7 @@ namespace
                 }
 
                 if (JxlDecoderSetImageOutBuffer(
-                    dec,
+                    context.GetDecoder(),
                     &format,
                     imageOutBuffer.data(),
                     imageOutBuffer.size()) != JXL_DEC_SUCCESS)
@@ -579,11 +347,11 @@ namespace
                     }
 
                     if (JxlDecoderSetExtraChannelBuffer(
-                        dec,
+                        context.GetDecoder(),
                         &format,
                         cmykBlackChannelBuffer.data(),
                         cmykBlackChannelBuffer.size(),
-                        static_cast<uint32_t>(cmykBlackChannelIndex)) != JXL_DEC_SUCCESS)
+                        context.GetCmykBlackChannelIndex()) != JXL_DEC_SUCCESS)
                     {
                         SetErrorMessage(errorInfo, "JxlDecoderSetExtraChannelBuffer failed.");
                         return DecoderStatus::DecodeError;
@@ -641,21 +409,34 @@ namespace
         return DecoderStatus::Ok;
     }
 
-    DecoderStatus ReadMetadata(DecoderCallbacks* callbacks, JxlDecoder* dec, ErrorInfo* errorInfo)
+    DecoderStatus ReadImageInfoAndMetadata(
+        DecoderCallbacks* callbacks,
+        DecoderContext& context,
+        ErrorInfo* errorInfo,
+        bool mayHaveMetadata)
     {
+        int eventsWanted = JXL_DEC_BASIC_INFO | JXL_DEC_COLOR_ENCODING;
+
+        if (mayHaveMetadata)
+        {
+            eventsWanted |= JXL_DEC_BOX | JXL_DEC_BOX_COMPLETE;
+        }
+
         if (JxlDecoderSubscribeEvents(
-            dec,
-            JXL_DEC_BOX |
-            JXL_DEC_BOX_COMPLETE) != JXL_DEC_SUCCESS)
+            context.GetDecoder(),
+            eventsWanted) != JXL_DEC_SUCCESS)
         {
             SetErrorMessage(errorInfo, "JxlDecoderSubscribeEvents failed.");
             return DecoderStatus::DecodeError;
         }
 
-        if (JxlDecoderSetDecompressBoxes(dec, JXL_TRUE) != JXL_DEC_SUCCESS)
+        if (mayHaveMetadata)
         {
-            SetErrorMessage(errorInfo, "JxlDecoderSetDecompressBoxes failed.");
-            return DecoderStatus::DecodeError;
+            if (JxlDecoderSetDecompressBoxes(context.GetDecoder(), JXL_TRUE) != JXL_DEC_SUCCESS)
+            {
+                SetErrorMessage(errorInfo, "JxlDecoderSetDecompressBoxes failed.");
+                return DecoderStatus::DecodeError;
+            }
         }
 
         std::vector<uint8_t> boxMetadataBuffer;
@@ -665,22 +446,249 @@ namespace
         bool readingExifBox = false;
         bool readingXmpBox = false;
 
+        DecoderImageFormat decoderImageFormat = DecoderImageFormat::Gray;
         JxlDecoderStatus status = JXL_DEC_ERROR;
 
         do
         {
-            status = JxlDecoderProcessInput(dec);
+            status = JxlDecoderProcessInput(context.GetDecoder());
 
             if (status == JXL_DEC_ERROR)
             {
                 SetErrorMessage(errorInfo, "JxlDecoderProcessInput failed.");
                 return DecoderStatus::DecodeError;
             }
+            else if (status == JXL_DEC_BASIC_INFO)
+            {
+                if (JxlDecoderGetBasicInfo(context.GetDecoder(), context.GetBasicInfoPtr()) != JXL_DEC_SUCCESS)
+                {
+                    SetErrorMessage(errorInfo, "JxlDecoderGetBasicInfo failed.");
+                    return DecoderStatus::DecodeError;
+                }
+
+                auto& basicInfo = context.GetBasicInfo();
+
+                const uint32_t width = basicInfo.xsize;
+                const uint32_t height = basicInfo.ysize;
+                const uint32_t colorChannelCount = basicInfo.num_color_channels;
+                const uint32_t extraChannelCount = basicInfo.num_extra_channels;
+                const bool hasTransparency = basicInfo.alpha_bits != 0;
+
+                if (width > static_cast<uint32_t>(std::numeric_limits<int32_t>::max()) ||
+                    height > static_cast<uint32_t>(std::numeric_limits<int32_t>::max()))
+                {
+                    return DecoderStatus::ImageDimensionExceedsInt32;
+                }
+
+                uint32_t cmykBlackChannelIndex = std::numeric_limits<uint32_t>::max();
+
+                if (colorChannelCount != 1 && colorChannelCount != 3
+                    || !ExtraChannelsAreSupported(context.GetDecoder(), basicInfo, cmykBlackChannelIndex))
+                {
+                    // The format is not CMYK, Gray, or RGB with optional transparency.
+                    return DecoderStatus::UnsupportedChannelFormat;
+                }
+
+                auto& format = context.GetPixelFormat();
+
+                format.num_channels = colorChannelCount + (hasTransparency ? 1 : 0);
+
+                if (colorChannelCount == 1)
+                {
+                    decoderImageFormat = DecoderImageFormat::Gray;
+                }
+                else if (cmykBlackChannelIndex != std::numeric_limits<uint32_t>::max())
+                {
+                    decoderImageFormat = DecoderImageFormat::Cmyk;
+                    context.SetCmykBlackChannelIndex(cmykBlackChannelIndex);
+                }
+                else
+                {
+                    decoderImageFormat = DecoderImageFormat::Rgb;
+                }
+
+                ImageChannelRepresentation channelRepresentation = ImageChannelRepresentation::Uint8;
+
+                if (basicInfo.exponent_bits_per_sample > 0)
+                {
+                    if (decoderImageFormat == DecoderImageFormat::Cmyk)
+                    {
+                        // WIC cannot represent this CMYK format.
+                        SetErrorMessage(errorInfo, "Floating point CMYK images are not supported.");
+                        return DecoderStatus::DecodeError;
+                    }
+                    else if (basicInfo.bits_per_sample <= 16)
+                    {
+                        format.data_type = JXL_TYPE_FLOAT16;
+                        channelRepresentation = ImageChannelRepresentation::Float16;
+                    }
+                    else if (basicInfo.bits_per_sample <= 32)
+                    {
+                        format.data_type = JXL_TYPE_FLOAT;
+                        channelRepresentation = ImageChannelRepresentation::Float32;
+                    }
+                    else
+                    {
+                        SetErrorMessageFormat(errorInfo, "Unsupported floating point bit depth: %u.", basicInfo.bits_per_sample);
+                        return DecoderStatus::DecodeError;
+                    }
+                }
+                else if (basicInfo.bits_per_sample > 8)
+                {
+                    if (basicInfo.bits_per_sample <= 16)
+                    {
+                        if (decoderImageFormat == DecoderImageFormat::Cmyk)
+                        {
+                            // WIC throws an InvalidColorProfileException for the CMYK64 test image
+                            // I was using, the same profile works for a CMYK32 image.
+                            SetErrorMessage(errorInfo, "CMYK64 images are not supported.");
+                            return DecoderStatus::DecodeError;
+                        }
+
+                        format.data_type = JXL_TYPE_UINT16;
+                        channelRepresentation = ImageChannelRepresentation::Uint16;
+                    }
+                    else
+                    {
+                        SetErrorMessageFormat(errorInfo, "Unsupported integer bit depth: %u.", basicInfo.bits_per_sample);
+                        return DecoderStatus::DecodeError;
+                    }
+                }
+
+                callbacks->setBasicInfo(width, height, decoderImageFormat, channelRepresentation, hasTransparency);
+                context.SetDecoderImageFormat(decoderImageFormat);
+                context.SetImageChannelRepresentation(channelRepresentation);
+            }
+            else if (status == JXL_DEC_COLOR_ENCODING)
+            {
+                // An image can have two different color profiles.
+                // 1. The target data color profile.
+                // 2. The original color profile for XYB images.
+
+                JxlColorEncoding originalEncodedProfile{};
+
+                if (JxlDecoderGetColorAsEncodedProfile(
+                    context.GetDecoder(),
+                    JXL_COLOR_PROFILE_TARGET_ORIGINAL,
+                    &originalEncodedProfile) == JXL_DEC_SUCCESS)
+                {
+                    // The original profile is a libjxl encoded profile.
+
+                    if (JxlDecoderSetPreferredColorProfile(context.GetDecoder(), &originalEncodedProfile) == JXL_DEC_SUCCESS)
+                    {
+                        JxlColorEncoding asTargetData{};
+
+                        if (JxlDecoderGetColorAsEncodedProfile(
+                            context.GetDecoder(),
+                            JXL_COLOR_PROFILE_TARGET_DATA,
+                            &asTargetData) != JXL_DEC_SUCCESS)
+                        {
+                            // If the original profile cannot be used for the output, we fall back to sRGB/sGray for the XYB conversion.
+                            JxlColorEncoding fallbackProfile{};
+                            fallbackProfile.color_space = decoderImageFormat == DecoderImageFormat::Gray ? JXL_COLOR_SPACE_GRAY : JXL_COLOR_SPACE_RGB;
+                            fallbackProfile.primaries = JXL_PRIMARIES_SRGB;
+                            fallbackProfile.transfer_function = JXL_TRANSFER_FUNCTION_SRGB;
+                            fallbackProfile.white_point = JXL_WHITE_POINT_D65;
+                            fallbackProfile.rendering_intent = JXL_RENDERING_INTENT_PERCEPTUAL;
+
+                            if (JxlDecoderSetPreferredColorProfile(context.GetDecoder(), &fallbackProfile) != JXL_DEC_SUCCESS)
+                            {
+                                SetErrorMessage(errorInfo, "JxlDecoderSetPreferredColorProfile failed for the fall back profile.");
+                                return DecoderStatus::DecodeError;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    size_t iccProfileSize = 0;
+
+                    if (JxlDecoderGetICCProfileSize(
+                        context.GetDecoder(),
+                        JXL_COLOR_PROFILE_TARGET_ORIGINAL,
+                        &iccProfileSize) == JXL_DEC_SUCCESS)
+                    {
+                        // The original profile is an ICC profile.
+                        if (iccProfileSize > 0)
+                        {
+                            std::vector<uint8_t> iccProfileBuffer(iccProfileSize);
+
+                            if (JxlDecoderGetColorAsICCProfile(
+                                context.GetDecoder(),
+                                JXL_COLOR_PROFILE_TARGET_ORIGINAL,
+                                iccProfileBuffer.data(),
+                                iccProfileSize) == JXL_DEC_SUCCESS)
+                            {
+                                if (JxlDecoderSetCms(context.GetDecoder(), *JxlGetDefaultCms()) == JXL_DEC_SUCCESS)
+                                {
+                                    // Instruct libjxl to convert the image to the original color
+                                    // profile as part of the decoding process.
+                                    JxlDecoderSetOutputColorProfile(
+                                        context.GetDecoder(),
+                                        nullptr,
+                                        iccProfileBuffer.data(),
+                                        iccProfileSize);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                SetProfileFromEncodingStatus encodedProfileStatus = SetProfileFromEncodingStatus::UnsupportedColorEncoding;
+
+                JxlColorEncoding colorEncoding{};
+
+                if (JxlDecoderGetColorAsEncodedProfile(
+                    context.GetDecoder(),
+                    JXL_COLOR_PROFILE_TARGET_DATA,
+                    &colorEncoding) == JXL_DEC_SUCCESS)
+                {
+                    encodedProfileStatus = SetProfileFromColorEncoding(callbacks, colorEncoding);
+
+                    if (encodedProfileStatus == SetProfileFromEncodingStatus::Error)
+                    {
+                        return DecoderStatus::CreateMetadataError;
+                    }
+                }
+
+                if (encodedProfileStatus == SetProfileFromEncodingStatus::UnsupportedColorEncoding)
+                {
+                    size_t iccProfileSize = 0;
+
+                    if (JxlDecoderGetICCProfileSize(
+                        context.GetDecoder(),
+                        JXL_COLOR_PROFILE_TARGET_DATA,
+                        &iccProfileSize) == JXL_DEC_SUCCESS)
+                    {
+                        if (iccProfileSize > 0)
+                        {
+                            std::vector<uint8_t> iccProfileBuffer;
+                            iccProfileBuffer.resize(iccProfileSize);
+
+                            if (JxlDecoderGetColorAsICCProfile(
+                                context.GetDecoder(),
+                                JXL_COLOR_PROFILE_TARGET_DATA,
+                                iccProfileBuffer.data(),
+                                iccProfileSize) != JXL_DEC_SUCCESS)
+                            {
+                                return DecoderStatus::MetadataError;
+                            }
+
+                            if (!callbacks->setIccProfile(
+                                iccProfileBuffer.data(),
+                                iccProfileBuffer.size()))
+                            {
+                                return DecoderStatus::CreateMetadataError;
+                            }
+                        }
+                    }
+                }
+            }
             else if (status == JXL_DEC_BOX)
             {
                 JxlBoxType type;
 
-                if (JxlDecoderGetBoxType(dec, type, JXL_TRUE) != JXL_DEC_SUCCESS)
+                if (JxlDecoderGetBoxType(context.GetDecoder(), type, JXL_TRUE) != JXL_DEC_SUCCESS)
                 {
                     SetErrorMessage(errorInfo, "JxlDecoderGetBoxType failed.");
                     return DecoderStatus::DecodeError;
@@ -700,7 +708,7 @@ namespace
                         boxMetadataBufferOffset = 0;
 
                         if (JxlDecoderSetBoxBuffer(
-                            dec,
+                            context.GetDecoder(),
                             boxMetadataBuffer.data(),
                             boxMetadataBuffer.size()) != JXL_DEC_SUCCESS)
                         {
@@ -720,7 +728,7 @@ namespace
                     boxMetadataBufferOffset = 0;
 
                     if (JxlDecoderSetBoxBuffer(
-                        dec,
+                        context.GetDecoder(),
                         boxMetadataBuffer.data(),
                         boxMetadataBuffer.size()) != JXL_DEC_SUCCESS)
                     {
@@ -731,13 +739,13 @@ namespace
             }
             else if (status == JXL_DEC_BOX_NEED_MORE_OUTPUT)
             {
-                size_t remaining = JxlDecoderReleaseBoxBuffer(dec);
+                size_t remaining = JxlDecoderReleaseBoxBuffer(context.GetDecoder());
 
                 boxMetadataBufferOffset += boxMetadataChunkSize - remaining;
                 boxMetadataBuffer.resize(boxMetadataBuffer.size() + boxMetadataChunkSize);
 
                 if (JxlDecoderSetBoxBuffer(
-                    dec,
+                    context.GetDecoder(),
                     boxMetadataBuffer.data() + boxMetadataBufferOffset,
                     boxMetadataBuffer.size() - boxMetadataBufferOffset) != JXL_DEC_SUCCESS)
                 {
@@ -751,7 +759,7 @@ namespace
                 {
                     readingExifBox = false;
 
-                    size_t remaining = JxlDecoderReleaseBoxBuffer(dec);
+                    size_t remaining = JxlDecoderReleaseBoxBuffer(context.GetDecoder());
 
                     if (!callbacks->setExif(
                         boxMetadataBuffer.data(),
@@ -764,7 +772,7 @@ namespace
                 {
                     readingXmpBox = false;
 
-                    size_t remaining = JxlDecoderReleaseBoxBuffer(dec);
+                    size_t remaining = JxlDecoderReleaseBoxBuffer(context.GetDecoder());
 
                     if (!callbacks->setXmp(
                         boxMetadataBuffer.data(),
@@ -779,7 +787,6 @@ namespace
                 SetErrorMessage(errorInfo, "JxlDecoderProcessInput needs more input, but it already received the entire image.");
                 return DecoderStatus::DecodeError;
             }
-
         } while (status != JXL_DEC_SUCCESS);
 
         return DecoderStatus::Ok;
@@ -806,46 +813,35 @@ DecoderStatus DecoderReadImage(
             return DecoderStatus::InvalidFileSignature;
         }
 
-        auto dec = JxlDecoderMake(nullptr);
+        const bool mayHaveMetadata = fileSignature == JXL_SIG_CONTAINER;
 
-        if (JxlDecoderSetInput(dec.get(), data, dataSize) != JXL_DEC_SUCCESS)
-        {
-            SetErrorMessage(errorInfo, "JxlDecoderSetInput failed.");
-            return DecoderStatus::DecodeError;
-        }
-        JxlDecoderCloseInput(dec.get());
+        DecoderContext context(data, dataSize);
 
-        DecoderStatus status = ReadFrameData(callbacks, dec.get(), errorInfo);
+        DecoderStatus status = ReadImageInfoAndMetadata(callbacks, context, errorInfo, mayHaveMetadata);
 
         if (status != DecoderStatus::Ok)
         {
             return status;
         }
 
-        if (fileSignature == JXL_SIG_CONTAINER)
+        // Parse the file again to read the frame data.
+        context.ResetDecoder();
+
+        status = ReadFrameData(callbacks, context, errorInfo);
+
+        if (status != DecoderStatus::Ok)
         {
-            // Parse the file again to look for EXIF and XMP metadata.
-            JxlDecoderReleaseInput(dec.get());
-            JxlDecoderReset(dec.get());
-
-            if (JxlDecoderSetInput(dec.get(), data, dataSize) != JXL_DEC_SUCCESS)
-            {
-                SetErrorMessage(errorInfo, "JxlDecoderSetInput failed.");
-                return DecoderStatus::DecodeError;
-            }
-            JxlDecoderCloseInput(dec.get());
-
-            status = ReadMetadata(callbacks, dec.get(), errorInfo);
-
-            if (status != DecoderStatus::Ok)
-            {
-                return status;
-            }
+            return status;
         }
     }
     catch (const std::bad_alloc&)
     {
         return DecoderStatus::OutOfMemory;
+    }
+    catch (const std::exception& e)
+    {
+        SetErrorMessage(errorInfo, e.what());
+        return DecoderStatus::DecodeError;
     }
     catch (...)
     {

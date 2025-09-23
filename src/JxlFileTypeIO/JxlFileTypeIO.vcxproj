@@ -200,6 +200,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Common.h" />
+    <ClInclude Include="Decoder\DecoderContext.h" />
     <ClInclude Include="Decoder\JxlDecoder.h" />
     <ClInclude Include="Decoder\JxlDecoderTypes.h" />
     <ClInclude Include="Encoder\JxlEncoder.h" />
@@ -211,6 +212,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Common.cpp" />
+    <ClCompile Include="Decoder\DecoderContext.cpp" />
     <ClCompile Include="Decoder\JxlDecoder.cpp" />
     <ClCompile Include="Encoder\JxlEncoder.cpp" />
     <ClCompile Include="Encoder\OutputProcessor.cpp" />

@@ -54,6 +54,9 @@
     <ClInclude Include="Encoder\PixelFormatConversion.h">
       <Filter>Header Files\Encoder</Filter>
     </ClInclude>
+    <ClInclude Include="Decoder\DecoderContext.h">
+      <Filter>Header Files\Decoder</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="JxlFileTypeIO.cpp">
@@ -73,6 +76,9 @@
     </ClCompile>
     <ClCompile Include="Encoder\PixelFormatConversion.cpp">
       <Filter>Source Files\Encoder</Filter>
+    </ClCompile>
+    <ClCompile Include="Decoder\DecoderContext.cpp">
+      <Filter>Source Files\Decoder</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
