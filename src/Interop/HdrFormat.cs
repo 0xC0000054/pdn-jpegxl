@@ -12,15 +12,9 @@
 
 namespace JpegXLFileTypePlugin.Interop
 {
-    internal enum KnownColorProfile : int
+    internal enum HdrFormat
     {
-        Srgb = 0,
-        LinearSrgb,
-        LinearGray,
-        GraySrgbTRC,
-        DisplayP3,
-        Rec709,
-        Rec2020Linear,
-        Rec2020PQ,
+        None = 0,
+        PQ,
     }
 }

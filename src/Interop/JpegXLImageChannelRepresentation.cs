@@ -12,10 +12,11 @@
 
 namespace JpegXLFileTypePlugin.Interop
 {
-    internal enum JpegXLImageFormat : int
+    internal enum JpegXLImageChannelRepresentation : int
     {
-        Gray = 0,
-        Rgb = 1,
-        Cmyk = 2,
+        Uint8 = 0,
+        Uint16,
+        Float16,
+        Float32
     }
 }

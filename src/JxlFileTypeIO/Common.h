@@ -30,6 +30,14 @@ struct ColorBgra
     uint8_t a;
 };
 
+enum class ImageChannelRepresentation : int32_t
+{
+    Uint8 = 0,
+    Uint16,
+    Float16,
+    Float32
+};
+
 typedef bool(__stdcall* ProgressProc)(int32_t progressPrecentage);
 
 // The I/O Callbacks return a Windows HRESULT, we do not include Windows.h

@@ -17,7 +17,8 @@ namespace JpegXLFileTypePlugin.Interop
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     internal delegate void SetBasicInfoDelegate(int canvasWidth,
                                                 int canvasHeight,
-                                                JpegXLImageFormat format,
+                                                JpegXLColorSpace format,
+                                                JpegXLImageChannelRepresentation channelRepresentation,
                                                 [MarshalAs(UnmanagedType.U1) ]bool hasTransparency);
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]

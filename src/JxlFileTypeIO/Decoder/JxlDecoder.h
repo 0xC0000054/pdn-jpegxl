@@ -12,7 +12,6 @@
 
 #pragma once
 
-#include "Common.h"
 #include "JxlDecoderTypes.h"
 
 DecoderStatus DecoderReadImage(

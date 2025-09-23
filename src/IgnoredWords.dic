@@ -3,6 +3,7 @@ elle
 endian
 endianess
 exif
+hdr
 ifd
 interop
 jpeg

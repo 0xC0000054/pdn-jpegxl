@@ -13,10 +13,14 @@
 using JpegXLFileTypePlugin.Exif;
 using JpegXLFileTypePlugin.Interop;
 using PaintDotNet;
+using PaintDotNet.Direct2D1;
+using PaintDotNet.Direct2D1.Effects;
+using PaintDotNet.Dxgi;
 using PaintDotNet.Imaging;
 using PaintDotNet.Rendering;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 
 namespace JpegXLFileTypePlugin
@@ -77,22 +81,25 @@ namespace JpegXLFileTypePlugin
 
             Surface surface = bitmapLayer.Surface;
 
-            switch (decoderImage.Format)
+            switch (decoderImage.ColorSpace)
             {
-                case JpegXLImageFormat.Cmyk:
+                case JpegXLColorSpace.Cmyk:
                     SetLayerColorDataFromCmykImage(layerData.Color,
                                                    decoderImage.TryGetColorContext(),
                                                    surface,
                                                    imagingFactory);
                     break;
-                case JpegXLImageFormat.Gray:
-                case JpegXLImageFormat.Rgb:
+                case JpegXLColorSpace.Gray:
+                case JpegXLColorSpace.Rgb:
                     // Gray images are loaded as RGB due to WIC having poor support for gray to RGB format conversions.
                     // WIC was throwing an exception when trying to convert from a gray color profile to a RGB color profile.
-                    SetLayerColorDataFromRgbImage(layerData.Color, surface);
+                    SetLayerColorDataFromRgbImage(layerData.Color,
+                                                  decoderImage.ChannelRepresentation,
+                                                  decoderImage.HdrFormat,
+                                                  surface);
                     break;
                 default:
-                    throw new InvalidOperationException($"Unknown {nameof(JpegXLImageFormat)} value: {decoderImage.Format}.");
+                    throw new InvalidOperationException($"Unknown {nameof(JpegXLColorSpace)} value: {decoderImage.ColorSpace}.");
             }
 
             if (layerData.Transparency != null)
@@ -109,9 +116,9 @@ namespace JpegXLFileTypePlugin
 
         private static void SetDocumentColorProfile(DecoderImage decoderImage, Document doc, IImagingFactory imagingFactory)
         {
-            JpegXLImageFormat format = decoderImage.Format;
+            JpegXLColorSpace colorSpace = decoderImage.ColorSpace;
 
-            if (format == JpegXLImageFormat.Gray || format == JpegXLImageFormat.Rgb)
+            if (colorSpace == JpegXLColorSpace.Gray || colorSpace == JpegXLColorSpace.Rgb)
             {
                 // Gray images are loaded as RGB due to WIC having poor support for gray to RGB format conversions.
                 // WIC was throwing an exception when trying to convert from a gray color profile to a RGB color profile.
@@ -125,7 +132,7 @@ namespace JpegXLFileTypePlugin
                     doc.SetColorContext(colorContext);
                 }
             }
-            else if (format == JpegXLImageFormat.Cmyk)
+            else if (colorSpace == JpegXLColorSpace.Cmyk)
             {
                 // https://discord.com/channels/143867839282020352/960223751599976479/1167941100976222360
                 // Clinton Ingram (saucecontrol) recommends using Adobe RGB for CMYK data that is converted to RGB.
@@ -164,19 +171,61 @@ namespace JpegXLFileTypePlugin
             }
         }
 
-        private static unsafe void SetLayerColorDataFromRgbImage(IBitmap color, Surface surface)
+        private static unsafe void SetLayerColorDataFromRgbImage(IBitmap color,
+                                                                 JpegXLImageChannelRepresentation imageChannelRepresentation,
+                                                                 HdrFormat hdrFormat,
+                                                                 Surface surface)
         {
-            CopyFromBitmapChunked(color, surface, (bitmapLock, destRegion) =>
+            if (hdrFormat == HdrFormat.None)
             {
-                byte* srcScan0 = (byte*)bitmapLock.Buffer;
-                int srcStride = bitmapLock.BufferStride;
+                switch (imageChannelRepresentation)
+                {
+                    case JpegXLImageChannelRepresentation.Uint8:
+                        SetLayerColorDataFromRgbImage(color.Cast<ColorRgb24>(), surface);
+                        break;
+                    case JpegXLImageChannelRepresentation.Uint16:
+                    case JpegXLImageChannelRepresentation.Float16:
+                    case JpegXLImageChannelRepresentation.Float32:
+                        SetLayerColorDataFromSdrImage(color, surface);
+                        break;
+                    default:
+                        throw new InvalidEnumArgumentException(nameof(imageChannelRepresentation),
+                                                               (int)imageChannelRepresentation,
+                                                               typeof(JpegXLImageChannelRepresentation));
+                }
+            }
+            else if (hdrFormat == HdrFormat.PQ)
+            {
+                switch (imageChannelRepresentation)
+                {
+                    case JpegXLImageChannelRepresentation.Uint16:
+                    case JpegXLImageChannelRepresentation.Float16:
+                    case JpegXLImageChannelRepresentation.Float32:
+                        SetLayerColorDataFromHdrPQImage(color, surface);
+                        break;
+                    case JpegXLImageChannelRepresentation.Uint8:
+                    default:
+                        throw new InvalidEnumArgumentException(nameof(imageChannelRepresentation),
+                                                               (int)imageChannelRepresentation,
+                                                               typeof(JpegXLImageChannelRepresentation));
+                }
+            }
+            else
+            {
+                throw new InvalidOperationException($"Unsupported {nameof(hdrFormat)} value: {hdrFormat}.");
+            }
+        }
 
+        private static unsafe void SetLayerColorDataFromRgbImage(IBitmap<ColorRgb24> color, Surface surface)
+        {
+            CopyFromBitmapChunked(color, surface, (srcRegion, destRegion) =>
+            {
                 int width = destRegion.Width;
                 int height = destRegion.Height;
 
                 for (int y = 0; y < height; y++)
                 {
-                    ColorRgb24* src = (ColorRgb24*)(srcScan0 + ((long)y * srcStride));
+                    ColorRgb24* src = srcRegion.Rows[y].Ptr;
                     ColorBgra32* dst = destRegion.Rows[y].Ptr;
 
                     for (int x = 0; x < width; x++)
@@ -193,19 +242,16 @@ namespace JpegXLFileTypePlugin
 
         private static unsafe void SetLayerTransparency(IBitmap<ColorAlpha8> transparency, Surface surface)
         {
-            CopyFromBitmapChunked(transparency, surface, (bitmapLock, destRegion) =>
+            CopyFromBitmapChunked(transparency, surface, (srcRegion, destRegion) =>
             {
-                RegionPtr<byte> source = new((byte*)bitmapLock.Buffer,
-                                             bitmapLock.Size,
-                                             bitmapLock.BufferStride);
-
-                PixelKernels.ReplaceChannel(destRegion, source, 3);
+                PixelKernels.ReplaceChannel(destRegion, srcRegion.Cast<byte>(), 3);
             });
         }
 
-        private static unsafe void CopyFromBitmapChunked(IBitmap source,
-                                                         Surface destination,
-                                                         Action<IBitmapLock, RegionPtr<ColorBgra32>> copyAction)
+        private static unsafe void CopyFromBitmapChunked<TPixel>(IBitmap<TPixel> source,
+                                                                 Surface destination,
+                                                                 Action<RegionPtr<TPixel>, RegionPtr<ColorBgra32>> copyAction)
+            where TPixel : unmanaged, INaturalPixelInfo
         {
             RegionPtr<ColorBgra32> surfaceRegion = destination.AsRegionPtr().Cast<ColorBgra32>();
 
@@ -213,10 +259,62 @@ namespace JpegXLFileTypePlugin
             {
                 RegionPtr<ColorBgra32> destRegion = surfaceRegion.Slice(copyRect);
 
-                using (IBitmapLock bitmapLock = source.Lock(copyRect, BitmapLockOptions.Read))
+                using (IBitmapLock<TPixel> bitmapLock = source.Lock(copyRect, BitmapLockOptions.Read))
                 {
-                    copyAction(bitmapLock, destRegion);
+                    copyAction(bitmapLock.AsRegionPtr(), destRegion);
                 }
+            }
+        }
+
+        private static void SetLayerColorDataFromHdrPQImage(IBitmap source, Surface destination)
+        {
+            using (IImagingFactory imagingFactory = ImagingFactory.CreateRef())
+            using (IColorContext dp3ColorContext = imagingFactory.CreateColorContext(KnownColorSpace.DisplayP3))
+            using (IDirect2DFactory d2dFactory = Direct2DFactory.Create())
+            {
+                using (IBitmapSource<ColorPbgra32> dp3Image = PQToColorContext(source,
+                                                                               imagingFactory,
+                                                                               d2dFactory,
+                                                                               dp3ColorContext))
+                {
+                    dp3Image.CopyPixels(destination.AsRegionPtr().Cast<ColorPbgra32>());
+                }
+            }
+
+            static IBitmapSource<ColorPbgra32> PQToColorContext(
+                IBitmapSource bitmap,
+                IImagingFactory imagingFactory,
+                IDirect2DFactory d2dFactory,
+                IColorContext colorContext)
+            {
+                return d2dFactory.CreateBitmapSourceFromImage<ColorPbgra32>(
+                    bitmap.Size,
+                    DevicePixelFormats.Prgba128Float,
+                    delegate (IDeviceContext dc)
+                    {
+                        dc.EffectBufferPrecision = BufferPrecision.Float32;
+                        using IDeviceImage srcImage = dc.CreateImageFromBitmap(bitmap, null, BitmapImageOptions.UseStraightAlpha);
+                        using IDeviceColorContext srcColorContext = dc.CreateColorContext(DxgiColorSpace.RgbFullGamma2084NoneP2020);
+                        using IDeviceColorContext dstColorContext = dc.CreateColorContext(colorContext);
+
+                        ColorManagementEffect colorMgmtEffect = new(
+                            dc,
+                            srcImage,
+                            srcColorContext,
+                            dstColorContext,
+                            ColorManagementAlphaMode.Straight);
+
+                        return colorMgmtEffect;
+                    });
+            }
+        }
+
+        private static void SetLayerColorDataFromSdrImage(IBitmap source, Surface destination)
+        {
+            using (IBitmapSource<ColorRgb24> convertedImage = source.CreateFormatConverter<ColorRgb24>())
+            using (IBitmap<ColorRgb24> asBitmap = convertedImage.ToBitmap())
+            {
+                SetLayerColorDataFromRgbImage(asBitmap, destination);
             }
         }
     }

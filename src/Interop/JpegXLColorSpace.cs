@@ -12,15 +12,10 @@
 
 namespace JpegXLFileTypePlugin.Interop
 {
-    internal enum KnownColorProfile : int
+    internal enum JpegXLColorSpace : int
     {
-        Srgb = 0,
-        LinearSrgb,
-        LinearGray,
-        GraySrgbTRC,
-        DisplayP3,
-        Rec709,
-        Rec2020Linear,
-        Rec2020PQ,
+        Gray = 0,
+        Rgb = 1,
+        Cmyk = 2,
     }
 }

@@ -12,7 +12,7 @@
 
 #pragma once
 
-#include <stdint.h>
+#include "Common.h"
 
 enum class DecoderStatus : int32_t
 {
@@ -47,12 +47,14 @@ enum class KnownColorProfile : int32_t
     DisplayP3,
     Rec709,
     Rec2020Linear,
+    Rec2020PQ,
 };
 
 typedef void(__stdcall* DecoderSetBasicInfo)(
     int32_t width,
     int32_t height,
     DecoderImageFormat format,
+    ImageChannelRepresentation channelFormat,
     bool hasTransparency);
 typedef bool(__stdcall* DecoderSetMetadata)(uint8_t* data, size_t length);
 typedef bool(__stdcall* DecoderSetKnownColorProfile)(KnownColorProfile profile);

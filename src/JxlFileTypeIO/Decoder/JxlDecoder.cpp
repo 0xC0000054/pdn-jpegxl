@@ -75,6 +75,18 @@ namespace
                         status = SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::Rec709);
                     }
                 }
+                else if (colorEncoding.primaries == JXL_PRIMARIES_2100)
+                {
+                    switch (colorEncoding.transfer_function)
+                    {
+                    case JXL_TRANSFER_FUNCTION_LINEAR:
+                        status = SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::Rec2020Linear);
+                        break;
+                    case JXL_TRANSFER_FUNCTION_PQ:
+                        status = SetKnownColorProfileFromEncoding(callbacks, KnownColorProfile::Rec2020PQ);
+                        break;
+                    }
+                }
             }
         }
         else if (colorEncoding.color_space == JXL_COLOR_SPACE_GRAY)
@@ -145,7 +157,7 @@ namespace
         return true;
     }
 
-    bool SetCmykImageData(
+    bool SetCmykImageDataUInt8(
         DecoderCallbacks* callbacks,
         size_t width,
         size_t height,
@@ -284,9 +296,6 @@ namespace
                     return DecoderStatus::UnsupportedChannelFormat;
                 }
 
-                uint32_t suggestedThreads = JxlResizableParallelRunnerSuggestThreads(basicInfo.xsize, basicInfo.ysize);
-                JxlResizableParallelRunnerSetThreads(runner.get(), suggestedThreads);
-
                 format.num_channels = colorChannelCount + (hasTransparency ? 1 : 0);
 
                 if (colorChannelCount == 1)
@@ -302,7 +311,58 @@ namespace
                     decoderImageFormat = DecoderImageFormat::Rgb;
                 }
 
-                callbacks->setBasicInfo(width, height, decoderImageFormat, hasTransparency);
+                ImageChannelRepresentation channelRepresentation = ImageChannelRepresentation::Uint8;
+
+                if (basicInfo.exponent_bits_per_sample > 0)
+                {
+                    if (decoderImageFormat == DecoderImageFormat::Cmyk)
+                    {
+                        // WIC cannot represent this CMYK format.
+                        SetErrorMessage(errorInfo, "Floating point CMYK images are not supported.");
+                        return DecoderStatus::DecodeError;
+                    }
+                    else if (basicInfo.bits_per_sample <= 16)
+                    {
+                        format.data_type = JXL_TYPE_FLOAT16;
+                        channelRepresentation = ImageChannelRepresentation::Float16;
+                    }
+                    else if (basicInfo.bits_per_sample <= 32)
+                    {
+                        format.data_type = JXL_TYPE_FLOAT;
+                        channelRepresentation = ImageChannelRepresentation::Float32;
+                    }
+                    else
+                    {
+                        SetErrorMessageFormat(errorInfo, "Unsupported floating point bit depth: %u.", basicInfo.bits_per_sample);
+                        return DecoderStatus::DecodeError;
+                    }
+                }
+                else if (basicInfo.bits_per_sample > 8)
+                {
+                    if (basicInfo.bits_per_sample <= 16)
+                    {
+                        if (decoderImageFormat == DecoderImageFormat::Cmyk)
+                        {
+                            // WIC throws an InvalidColorProfileException for the CMYK64 test image
+                            // I was using, the same profile works for a CMYK32 image.
+                            SetErrorMessage(errorInfo, "CMYK64 images are not supported.");
+                            return DecoderStatus::DecodeError;
+                        }
+
+                        format.data_type = JXL_TYPE_UINT16;
+                        channelRepresentation = ImageChannelRepresentation::Uint16;
+                    }
+                    else
+                    {
+                        SetErrorMessageFormat(errorInfo, "Unsupported integer bit depth: %u.", basicInfo.bits_per_sample);
+                        return DecoderStatus::DecodeError;
+                    }
+                }
+
+                callbacks->setBasicInfo(width, height, decoderImageFormat, channelRepresentation, hasTransparency);
+
+                uint32_t suggestedThreads = JxlResizableParallelRunnerSuggestThreads(basicInfo.xsize, basicInfo.ysize);
+                JxlResizableParallelRunnerSetThreads(runner.get(), suggestedThreads);
             }
             else if (status == JXL_DEC_COLOR_ENCODING)
             {
@@ -462,7 +522,26 @@ namespace
             {
                 if (imageOutBuffer.size() == 0)
                 {
-                    imageOutBuffer.resize(static_cast<size_t>(basicInfo.xsize) * basicInfo.ysize * format.num_channels);
+                    size_t bytesPerPixel = 0;
+
+                    switch (format.data_type)
+                    {
+                    case JXL_TYPE_UINT8:
+                        bytesPerPixel = format.num_channels;
+                        break;
+                    case JXL_TYPE_UINT16:
+                    case JXL_TYPE_FLOAT16:
+                        bytesPerPixel = static_cast<size_t>(format.num_channels) * 2;
+                        break;
+                    case JXL_TYPE_FLOAT:
+                        bytesPerPixel = static_cast<size_t>(format.num_channels) * 4;
+                        break;
+                    default:
+                        SetErrorMessage(errorInfo, "Unsupported color channel bytes per pixel.");
+                        return DecoderStatus::DecodeError;
+                    }
+
+                    imageOutBuffer.resize(static_cast<size_t>(basicInfo.xsize) * basicInfo.ysize * bytesPerPixel);
                 }
 
                 if (JxlDecoderSetImageOutBuffer(
@@ -479,7 +558,24 @@ namespace
                 {
                     if (cmykBlackChannelBuffer.size() == 0)
                     {
-                        cmykBlackChannelBuffer.resize(static_cast<size_t>(basicInfo.xsize) * basicInfo.ysize);
+                        size_t bytesPerPixel = 0;
+
+                        switch (format.data_type)
+                        {
+                        case JXL_TYPE_UINT8:
+                            bytesPerPixel = 1;
+                            break;
+                        case JXL_TYPE_UINT16:
+                            bytesPerPixel = 2;
+                            break;
+                        case JXL_TYPE_FLOAT16:
+                        case JXL_TYPE_FLOAT:
+                        default:
+                            SetErrorMessage(errorInfo, "Unsupported CMYK black channel bytes per pixel.");
+                            return DecoderStatus::DecodeError;
+                        }
+
+                        cmykBlackChannelBuffer.resize(static_cast<size_t>(basicInfo.xsize) * basicInfo.ysize * bytesPerPixel);
                     }
 
                     if (JxlDecoderSetExtraChannelBuffer(
@@ -507,7 +603,7 @@ namespace
 
                 if (decoderImageFormat == DecoderImageFormat::Cmyk)
                 {
-                    if (!SetCmykImageData(
+                    if (!SetCmykImageDataUInt8(
                         callbacks,
                         basicInfo.xsize,
                         basicInfo.ysize,

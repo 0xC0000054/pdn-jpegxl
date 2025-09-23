@@ -47,7 +47,10 @@ namespace JpegXLFileTypePlugin
 
         private static int GetLargeCopyHeight(int width, PixelFormat pixelFormat)
         {
-            int minStride = GetMinStrideChecked(width, pixelFormat.GetBitsPerPixel());
+            // The GetBitsPerPixel extension method doesn't support Rgb96Float in PDN 5.1.9.
+            int bitsPerPixel = pixelFormat == PixelFormats.Rgb96Float ? 96 : pixelFormat.GetBitsPerPixel();
+
+            int minStride = GetMinStrideChecked(width, bitsPerPixel);
 
             return GetLargeCopyHeight(minStride);
         }
