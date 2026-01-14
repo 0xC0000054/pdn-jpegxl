@@ -13,12 +13,13 @@
 using JpegXLFileTypePlugin.Exif;
 using JpegXLFileTypePlugin.Interop;
 using PaintDotNet;
-using PaintDotNet.Collections;
+using PaintDotNet.FileTypes;
 using PaintDotNet.Imaging;
 using PaintDotNet.Rendering;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 using ExifColorSpace = JpegXLFileTypePlugin.Exif.ExifColorSpace;
@@ -27,16 +28,16 @@ namespace JpegXLFileTypePlugin
 {
     internal static class JpegXLSave
     {
-        public static unsafe void Save(Document input,
+        public static unsafe void Save(IReadOnlyFileTypeDocument input,
                                        Stream output,
-                                       Surface scratchSurface,
                                        ProgressEventHandler progressEventHandler,
                                        int quality,
                                        bool lossless,
                                        int effort)
         {
-            scratchSurface.Clear();
-            input.CreateRenderer().Render(scratchSurface);
+            // TODO: support more pixel formats
+            using IFileTypeCompositeBitmap<ColorBgra32> compositeBitmap = input.GetCompositeBitmap<ColorBgra32>();
+            using IFileTypeBitmapLock<ColorBgra32> compositeLock = compositeBitmap.Lock();
 
             ProgressCallback? progressCallback = null;
 
@@ -59,10 +60,10 @@ namespace JpegXLFileTypePlugin
             EncoderOptions options = new(quality, lossless, effort);
             EncoderImageMetadata metadata = CreateImageMetadata(input);
 
-            JpegXLNative.SaveImage(scratchSurface, options, metadata, progressCallback, output);
+            JpegXLNative.SaveImage(compositeLock.AsRegionPtr(), options, metadata, progressCallback, output);
         }
 
-        private static EncoderImageMetadata CreateImageMetadata(Document input)
+        private static EncoderImageMetadata CreateImageMetadata(IReadOnlyFileTypeDocument input)
         {
             byte[]? exifBytes = null;
             byte[]? iccProfileBytes = null;
@@ -103,10 +104,10 @@ namespace JpegXLFileTypePlugin
                     propertyItems.Remove(ExifPropertyKeys.Interop.InteroperabilityVersion.Path);
                 }
 
-                exifBytes = new ExifWriter(input, propertyItems, exifColorSpace).CreateExifBlob();
+                exifBytes = new ExifWriter(input.Size, propertyItems, exifColorSpace).CreateExifBlob();
             }
 
-            XmpPacket? xmpPacket = input.Metadata.TryGetXmpPacket();
+            XmpPacket? xmpPacket = input.Metadata.Xmp.XmpPacket;
 
             if (xmpPacket != null)
             {
@@ -118,11 +119,11 @@ namespace JpegXLFileTypePlugin
             return new EncoderImageMetadata(exifBytes, iccProfileBytes, xmpBytes);
         }
 
-        private static Dictionary<ExifPropertyPath, ExifValue>? GetExifMetadataFromDocument(Document doc)
+        private static Dictionary<ExifPropertyPath, ExifValue>? GetExifMetadataFromDocument(IReadOnlyFileTypeDocument doc)
         {
             Dictionary<ExifPropertyPath, ExifValue>? items = null;
 
-            ExifPropertyItem[] exifProperties = doc.Metadata.GetExifPropertyItems();
+            ExifPropertyItem[] exifProperties = doc.Metadata.Exif.Items.ToArray();
 
             if (exifProperties.Length > 0)
             {

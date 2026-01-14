@@ -10,15 +10,15 @@
 //
 ////////////////////////////////////////////////////////////////////////
 
-using PaintDotNet;
+using PaintDotNet.FileTypes;
 
 namespace JpegXLFileTypePlugin
 {
-    public sealed class JpegXLFileTypeFactory : IFileTypeFactory2
+    public sealed class JpegXLFileTypeFactory : IFileTypeFactory
     {
-        public FileType[] GetFileTypeInstances(IFileTypeHost host)
+        public IFileType[] CreateFileTypes(IFileTypeHost host)
         {
-            return new FileType[] { new JpegXLFileType(host) };
+            return [new JpegXLFileType(host)];
         }
     }
 }
