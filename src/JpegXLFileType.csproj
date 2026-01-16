@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <Platforms>AnyCPU</Platforms>
     <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
@@ -47,8 +47,8 @@
     <Reference Include="PaintDotNet.Core">
       <HintPath>..\..\..\Program Files\paint.net\PaintDotNet.Core.dll</HintPath>
     </Reference>
-    <Reference Include="PaintDotNet.Data">
-      <HintPath>..\..\..\Program Files\paint.net\PaintDotNet.Data.dll</HintPath>
+    <Reference Include="PaintDotNet.FileTypes">
+      <HintPath>..\..\..\Program Files\paint.net\PaintDotNet.FileTypes.dll</HintPath>
     </Reference>
     <Reference Include="PaintDotNet.Framework">
       <HintPath>..\..\..\Program Files\paint.net\PaintDotNet.Framework.dll</HintPath>
