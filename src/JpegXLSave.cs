@@ -121,21 +121,14 @@ namespace JpegXLFileTypePlugin
 
         private static Dictionary<ExifPropertyPath, ExifValue>? GetExifMetadataFromDocument(IReadOnlyFileTypeDocument doc)
         {
-            Dictionary<ExifPropertyPath, ExifValue>? items = null;
+            Dictionary<ExifPropertyPath, ExifValue> items = new();
 
-            ExifPropertyItem[] exifProperties = doc.Metadata.Exif.Items.ToArray();
-
-            if (exifProperties.Length > 0)
+            foreach (ExifPropertyItem property in doc.Metadata.Exif.Items)
             {
-                items = new Dictionary<ExifPropertyPath, ExifValue>(exifProperties.Length);
-
-                foreach (ExifPropertyItem property in exifProperties)
-                {
-                    items.TryAdd(property.Path, property.Value);
-                }
+                items.TryAdd(property.Path, property.Value);
             }
 
-            return items;
+            return items.Count == 0 ? null : items;
         }
     }
 }
