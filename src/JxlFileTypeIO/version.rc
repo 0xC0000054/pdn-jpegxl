@@ -71,7 +71,7 @@ BEGIN
             VALUE "FileDescription", "JPEG XL FileType IO library"
             VALUE "FileVersion", "1.2.0.0"
             VALUE "InternalName", "JpegXLFi.dll"
-            VALUE "LegalCopyright", "Copyright (C) 2025 Nicholas Hayes"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Nicholas Hayes"
             VALUE "OriginalFilename", "JpegXLFi.dll"
             VALUE "ProductName", "JpegXLFileType"
             VALUE "ProductVersion", "1.2.0.0"
