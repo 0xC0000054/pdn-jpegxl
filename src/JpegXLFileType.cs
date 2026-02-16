@@ -65,9 +65,9 @@ namespace JpegXLFileTypePlugin
             {
             }
 
-            protected override IFileTypeDocument OnLoad(IFileTypeDocumentFactory factory, Stream input)
+            protected override IFileTypeDocument OnLoad(IFileTypeLoadContext context)
             {
-                return JpegXLLoad.Load(factory, input);
+                return JpegXLLoad.Load(context.Factory, context.Input);
             }
         }
 
@@ -156,16 +156,13 @@ namespace JpegXLFileTypePlugin
                 return info;
             }
 
-            protected override void OnSave(Stream output, 
-                                           IReadOnlyFileTypeDocument input, 
-                                           PropertyBasedFileTypeSaveOptions options, 
-                                           ProgressEventHandler progressCallback)
+            protected override void OnSave(IPropertyBasedFileTypeSaveContext context)
             {
-                int quality = options.GetProperty<Int32Property>(PropertyNames.Quality)!.Value;
-                bool lossless = options.GetProperty<BooleanProperty>(PropertyNames.Lossless)!.Value;
-                int effort = options.GetProperty<Int32Property>(PropertyNames.Effort)!.Value;
+                int quality = context.Options.GetProperty<Int32Property>(PropertyNames.Quality)!.Value;
+                bool lossless = context.Options.GetProperty<BooleanProperty>(PropertyNames.Lossless)!.Value;
+                int effort = context.Options.GetProperty<Int32Property>(PropertyNames.Effort)!.Value;
 
-                JpegXLSave.Save(input, output, progressCallback, quality, lossless, effort);
+                JpegXLSave.Save(context.Document, context.Output, context.ProgressCallback, quality, lossless, effort);
             }
         }
     }
