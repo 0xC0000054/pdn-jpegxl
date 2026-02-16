@@ -17,12 +17,13 @@ using System;
 
 namespace JpegXLFileTypePlugin.Interop
 {
-    // Wraps an IBitmapSource around a RegionPtr. Note that this is very unsafe to do, as it
-    // does not guarantee that the memory backed by the RegionPtr isn't freed before the
-    // IBitmapSource is done with it. However, in the context of a Paint.NET FileType plugin,
-    // the RegionPtrs it gives us will be valid for the lifetime of the Save or Load operation,
-    // so this is safe to do as long as the IBitmapSource isn't used after the Save or Load
-    // operation completes.
+    // Wraps an IBitmapSource around a RegionPtr. Note that this is inherently unsafe: this type
+    // does not and cannot guarantee that the memory backed by the RegionPtr remains valid for
+    // as long as the IBitmapSource is in use. It is the caller's responsibility to ensure that
+    // the RegionPtr's backing store stays alive and is not freed or reused for the entire
+    // lifetime of the IBitmapSource. In the context of a Paint.NET FileType plugin, this
+    // requirement is typically satisfied by only using the IBitmapSource within the lifetime of
+    // the corresponding Save or Load operation.
     internal sealed class RegionPtrBitmapSource<TPixel>
         : BitmapSourceBase<TPixel>
           where TPixel : unmanaged, INaturalPixelInfo
