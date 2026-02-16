@@ -99,6 +99,8 @@ namespace JpegXLFileTypePlugin
 
                 using IFileTypeBitmapSink bitmapLayerSink = bitmapLayer.GetBitmap();
                 bitmapLayerSink.WriteSource(bitmapLayerSource);
+
+                documentColorContext?.Dispose();
                 bitmapLayerSource.Dispose();
 
                 return document;
