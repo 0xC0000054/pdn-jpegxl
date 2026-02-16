@@ -14,6 +14,7 @@ using JpegXLFileTypePlugin.Localization;
 using PaintDotNet;
 using PaintDotNet.FileTypes;
 using PaintDotNet.FileTypes.JpegXL;
+using PaintDotNet.Imaging;
 using PaintDotNet.IndirectUI;
 using PaintDotNet.PropertySystem;
 using System;
@@ -67,7 +68,7 @@ namespace JpegXLFileTypePlugin
 
             protected override IFileTypeDocument OnLoad(IFileTypeLoadContext context)
             {
-                return JpegXLLoad.Load(context.Factory, context.Input);
+                return JpegXLLoad.Load(context.Factory, context.Input, this.Services.GetService<IImagingFactory>()!);
             }
         }
 
