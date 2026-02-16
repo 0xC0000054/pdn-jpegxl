@@ -64,8 +64,6 @@ namespace JpegXLFileTypePlugin.Interop
                                             IImagingFactory imagingFactory,
                                             byte* pixels)
         {
-            System.Diagnostics.Debugger.Break();
-
             return (colorSpace, channelRepresentation, hasTransparency) switch
             {
                 (JpegXLColorSpace.Rgb, JpegXLImageChannelRepresentation.Uint8, false) => CopyToBitmap<ColorRgb24>(width, height, pixels),
