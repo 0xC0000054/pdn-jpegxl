@@ -102,7 +102,7 @@ namespace JpegXLFileTypePlugin.Interop
             where TPixelGray : unmanaged, INaturalPixelInfo
             where TPixelRgb : unmanaged, INaturalPixelInfo
         {
-            // WIC doesn't support Gray pixel formats, so we must transform to RGB by duplicating the Gray channels
+            // PDN doesn't support Gray8 formats yet, so we convert to RGB ourselves
             RegionPtr<TPixelGray> regionG = new RegionPtr<TPixelGray>((TPixelGray*)pixels, width, height, sizeof(TPixelGray) * width);
             using IBitmapSource<TPixelGray> regionGBitmap = new RegionPtrBitmapSource<TPixelGray>(regionG);
             using IBitmapSource<TPixelRgb> rgbBitmap = regionGBitmap.CreateFormatConverter<TPixelRgb>();
