@@ -63,7 +63,7 @@ namespace JpegXLFileTypePlugin.Interop
 
         public DecoderLayerData? LayerData => layerData;
 
-        public IColorContext? TryGetColorContext() => colorContext;
+        public IColorContext? TryGetColorContext() => colorContext?.CreateRef();
 
         public ExifValueCollection? TryGetExif() => exif;
 
