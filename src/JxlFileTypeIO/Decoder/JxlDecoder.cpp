@@ -214,6 +214,64 @@ namespace
         return callbacks->setLayerData(outputScan0, layerName, layerNameLengthInBytes);
     }
 
+    bool SetCmykImageDataUInt16(
+        DecoderCallbacks* callbacks,
+        size_t width,
+        size_t height,
+        bool hasTransparency,
+        const std::vector<uint8_t>& cmya,
+        const std::vector<uint8_t>& key,
+        char* layerName,
+        size_t layerNameLengthInBytes)
+    {
+        const size_t transparencyChannelCount = hasTransparency ? 1 : 0;
+        const size_t cmyaChannelCount = 3 + transparencyChannelCount;
+        const size_t totalChannelCount = 4 + transparencyChannelCount;
+        const size_t outputStride = width * totalChannelCount * 2;
+
+        std::vector<uint8_t> output(outputStride * height);
+
+        uint8_t* const outputScan0 = output.data();
+        const uint8_t* cmyaScan0 = cmya.data();
+        const uint8_t* keyScan0 = key.data();
+        const size_t cmyaStride = width * cmyaChannelCount * 2;
+        const size_t keyStride = width * 2;
+
+        for (size_t y = 0; y < height; y++)
+        {
+            const uint16_t* cmya = reinterpret_cast<const uint16_t*>(cmyaScan0 + (y * cmyaStride));
+            const uint16_t* key = reinterpret_cast<const uint16_t*>(keyScan0 + (y * keyStride));
+            uint16_t* dst = reinterpret_cast<uint16_t*>(outputScan0 + (y * outputStride));
+
+            for (size_t x = 0; x < width; x++)
+            {
+                // Jpeg XL stores CMYK images with 0 representing black/full ink.
+                // https://discord.com/channels/794206016716791652103/16043244934209201633/1317691621727345167316
+                //
+                // "The K channel of a CMYK image. If present, a CMYK ICC profile is also present,
+                // and the RGB samples are to be interpreted as CMY, where 0 denotes full ink."
+                //
+                // WIC requires that 0 is white/no ink, so we have to invert the CMYK data.
+
+                dst[0] = static_cast<uint16_t>(0xffff - cmya[0]); // C
+                dst[1] = static_cast<uint16_t>(0xffff - cmya[1]); // M
+                dst[2] = static_cast<uint16_t>(0xffff - cmya[2]); // Y
+                dst[3] = static_cast<uint16_t>(0xffff - key[0]);  // K
+
+                if (hasTransparency)
+                {
+                    dst[4] = cmya[3]; // A
+                }
+
+                dst += totalChannelCount;
+                cmya += cmyaChannelCount;
+                key++;
+            }
+        }
+
+        return callbacks->setLayerData(outputScan0, layerName, layerNameLengthInBytes);
+    }
+
     DecoderStatus ReadFrameData(
         DecoderCallbacks* callbacks,
         const DecoderContext& context,
@@ -371,18 +429,41 @@ namespace
 
                 if (decoderImageFormat == DecoderImageFormat::Cmyk)
                 {
-                    if (!SetCmykImageDataUInt8(
-                        callbacks,
-                        basicInfo.xsize,
-                        basicInfo.ysize,
-                        basicInfo.alpha_bits != 0,
-                        imageOutBuffer,
-                        cmykBlackChannelBuffer,
-                        layerNamePtr,
-                        layerNameLengthInBytes))
+                    if (format.data_type == JXL_TYPE_UINT8)
                     {
-                        return DecoderStatus::CreateLayerError;
+                        if (!SetCmykImageDataUInt8(
+                            callbacks,
+                            basicInfo.xsize,
+                            basicInfo.ysize,
+                            basicInfo.alpha_bits != 0,
+                            imageOutBuffer,
+                            cmykBlackChannelBuffer,
+                            layerNamePtr,
+                            layerNameLengthInBytes))
+                        {
+                            return DecoderStatus::CreateLayerError;
+                        }
                     }
+                    else if (format.data_type == JXL_TYPE_UINT16)
+                    {
+                        if (!SetCmykImageDataUInt16(
+                            callbacks,
+                            basicInfo.xsize,
+                            basicInfo.ysize,
+                            basicInfo.alpha_bits != 0,
+                            imageOutBuffer,
+                            cmykBlackChannelBuffer,
+                            layerNamePtr,
+                            layerNameLengthInBytes))
+                        {
+                            return DecoderStatus::CreateLayerError;
+                        }
+                    }
+                    else
+                    {
+                        SetErrorMessage(errorInfo, "Unsupported CMYK bit depth.");
+                        return DecoderStatus::DecodeError;
+                    }                    
                 }
                 else
                 {
@@ -537,14 +618,6 @@ namespace
                 {
                     if (basicInfo.bits_per_sample <= 16)
                     {
-                        if (decoderImageFormat == DecoderImageFormat::Cmyk)
-                        {
-                            // WIC throws an InvalidColorProfileException for the CMYK64 test image
-                            // I was using, the same profile works for a CMYK32 image.
-                            SetErrorMessage(errorInfo, "CMYK64 images are not supported.");
-                            return DecoderStatus::DecodeError;
-                        }
-
                         format.data_type = JXL_TYPE_UINT16;
                         channelRepresentation = ImageChannelRepresentation::Uint16;
                     }
