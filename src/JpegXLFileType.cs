@@ -34,8 +34,9 @@ namespace JpegXLFileTypePlugin
             {
                 LoadExtensions = FileExtensions,
                 SaveExtensions = FileExtensions,
-                SupportsCancellationExceptions = true,
-                SupportsSavingLayers = false
+                SupportsSavingLayers = false,
+                IsSavingConfigurable = true,
+                SupportsCancellationExceptions = true
             })
         {
             if (host != null)
