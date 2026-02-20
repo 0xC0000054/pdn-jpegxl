@@ -54,7 +54,7 @@ namespace JpegXLFileTypePlugin
             return strings.GetString(name);
         }
 
-        protected override PropertyBasedFileTypeLoader OnCreateLoaderT()
+        protected override PropertyBasedFileTypeLoader OnCreatePropertyBasedLoader()
         {
             return new Loader(this);
         }
@@ -67,13 +67,13 @@ namespace JpegXLFileTypePlugin
             {
             }
 
-            protected override IFileTypeDocument OnLoad(IFileTypeLoadContext context)
+            protected override IFileTypeDocument OnLoad(IPropertyBasedFileTypeLoadContext context)
             {
                 return JpegXLLoad.Load(context.Factory, context.Input, this.Services.GetService<IImagingFactory>()!);
             }
         }
 
-        protected override PropertyBasedFileTypeSaver OnCreateSaverT()
+        protected override PropertyBasedFileTypeSaver OnCreatePropertyBasedSaver()
         {
             return new Saver(this);
         }
