@@ -814,7 +814,7 @@ namespace
             {
                 size_t remaining = JxlDecoderReleaseBoxBuffer(context.GetDecoder());
 
-                boxMetadataBufferOffset += boxMetadataChunkSize - remaining;
+                boxMetadataBufferOffset = boxMetadataBuffer.size() - remaining;
                 boxMetadataBuffer.resize(boxMetadataBuffer.size() + boxMetadataChunkSize);
 
                 if (JxlDecoderSetBoxBuffer(
