@@ -12,15 +12,11 @@
 
 namespace JpegXLFileTypePlugin.Interop
 {
+    // RGB color encodings are reported via the CICP color info; only the two gray encodings use this enum.
+    // The values must stay in sync with the native KnownColorProfile enum.
     internal enum KnownColorProfile : int
     {
-        Srgb = 0,
-        LinearSrgb,
-        LinearGray,
+        LinearGray = 0,
         GraySrgbTRC,
-        DisplayP3,
-        Rec709,
-        Rec2020Linear,
-        Rec2020PQ,
     }
 }

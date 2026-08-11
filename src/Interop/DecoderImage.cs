@@ -34,6 +34,7 @@ namespace JpegXLFileTypePlugin.Interop
         private readonly SetBasicInfoDelegate setBasicInfoDelegate;
         private readonly SetMetadataDelegate setIccProfileDelegate;
         private readonly SetKnownColorProfileDelegate setKnownColorProfileDelegate;
+        private readonly SetCicpColorInfoDelegate setCicpColorInfoDelegate;
         private readonly SetMetadataDelegate setExifDelegate;
         private readonly SetMetadataDelegate setXmpDelegate;
         private readonly SetLayerDataDelegate setLayerDataDelegate;
@@ -42,10 +43,10 @@ namespace JpegXLFileTypePlugin.Interop
         {
             hasTransparency = false;
             this.imagingFactory = imagingFactory.CreateRef();
-            HdrFormat = HdrFormat.None;
             setBasicInfoDelegate = SetBasicInfo;
             setIccProfileDelegate = SetIccProfile;
             setKnownColorProfileDelegate = SetKnownColorProfile;
+            setCicpColorInfoDelegate = SetCicpColorInfo;
             setExifDelegate = SetExif;
             setXmpDelegate = SetXmp;
             setLayerDataDelegate = SetLayerData;
@@ -59,7 +60,14 @@ namespace JpegXLFileTypePlugin.Interop
 
         public JpegXLImageChannelRepresentation ChannelRepresentation { get; private set; }
 
-        public HdrFormat HdrFormat { get; private set; }
+        // The image's color space as CICP code points, if the color encoding maps to one (RGB encodings that
+        // are describable by ITU-T H.273). Null for gray / ICC-profile / untagged images, which use
+        // TryGetColorContext instead.
+        public CicpColorSpace? CicpColorSpace { get; private set; }
+
+        // The HDR intensity target (peak luminance in nits) from JxlBasicInfo.intensity_target, meaningful
+        // only when CicpColorSpace is set. Zero if CicpColorSpace was not set.
+        public float IntensityTargetNits { get; private set; }
 
         public DecoderLayerData? LayerData => layerData;
 
@@ -78,6 +86,7 @@ namespace JpegXLFileTypePlugin.Interop
                 setBasicInfo = Marshal.GetFunctionPointerForDelegate(setBasicInfoDelegate),
                 setIccProfile = Marshal.GetFunctionPointerForDelegate(setIccProfileDelegate),
                 setKnownColorProfile = Marshal.GetFunctionPointerForDelegate(setKnownColorProfileDelegate),
+                setCicpColorInfo = Marshal.GetFunctionPointerForDelegate(setCicpColorInfoDelegate),
                 setExif = Marshal.GetFunctionPointerForDelegate(setExifDelegate),
                 setXmp = Marshal.GetFunctionPointerForDelegate(setXmpDelegate),
                 setLayerData = Marshal.GetFunctionPointerForDelegate(setLayerDataDelegate)
@@ -136,53 +145,17 @@ namespace JpegXLFileTypePlugin.Interop
         {
             try
             {
-                KnownColorSpace? colorSpace;
-
-                if (profile == KnownColorProfile.Rec2020PQ)
+                // The native decoder reports RGB color encodings via SetCicpColorInfo, so only the two gray
+                // encodings still arrive here. Gray images are loaded as RGB (WIC has poor gray-to-RGB support)
+                // and tagged with the matching sRGB / linear (scRGB) color context.
+                KnownColorSpace colorSpace = profile switch
                 {
-                    // We load Rec. 2020 PQ images as DisplayP3 after using Direct2D to remove the PQ curve.
-                    colorSpace = KnownColorSpace.DisplayP3;
-                    HdrFormat = HdrFormat.PQ;
-                }
-                else
-                {
-                    colorSpace = profile switch
-                    {
-                        // Gray images are loaded as RGB due to WIC having poor support for
-                        // gray to RGB format conversions.
-                        KnownColorProfile.Srgb or KnownColorProfile.GraySrgbTRC => KnownColorSpace.Srgb,
-                        KnownColorProfile.LinearSrgb or KnownColorProfile.LinearGray => KnownColorSpace.ScRgb,
-                        KnownColorProfile.DisplayP3 => KnownColorSpace.DisplayP3,
-                        _ => null,
-                    };
-                }
+                    KnownColorProfile.GraySrgbTRC => KnownColorSpace.Srgb,
+                    KnownColorProfile.LinearGray => KnownColorSpace.ScRgb,
+                    _ => throw new InvalidEnumArgumentException(nameof(profile), (int)profile, typeof(KnownColorProfile)),
+                };
 
-                if (colorSpace.HasValue)
-                {
-                    colorContext = imagingFactory!.CreateColorContext(colorSpace.Value);
-                }
-                else
-                {
-                    string resourcePath = profile switch
-                    {
-                        KnownColorProfile.Rec2020Linear => $"{nameof(JpegXLFileTypePlugin)}.ColorProfiles.Rec2020-elle-V4-g10.icc",
-                        KnownColorProfile.Rec709 => $"{nameof(JpegXLFileTypePlugin)}.ColorProfiles.Rec709-elle-V4-rec709.icc",
-                        _ => throw new InvalidEnumArgumentException(nameof(profile), (int)profile, typeof(KnownColorProfile)),
-                    };
-
-                    using (Stream? stream = typeof(DecoderImage).Assembly.GetManifestResourceStream(resourcePath))
-                    {
-                        if (stream == null)
-                        {
-                            throw new FileNotFoundException(resourcePath);
-                        }
-
-                        byte[] bytes = new byte[checked((int)stream.Length)];
-                        stream.ReadExactly(bytes);
-
-                        colorContext = imagingFactory!.CreateColorContext(bytes);
-                    }
-                }
+                colorContext = imagingFactory!.CreateColorContext(colorSpace);
             }
             catch (Exception ex)
             {
@@ -191,6 +164,51 @@ namespace JpegXLFileTypePlugin.Interop
             }
 
             return true;
+        }
+
+        private SetCicpColorInfoResult SetCicpColorInfo(
+            byte colorPrimaries,
+            byte transferCharacteristics,
+            byte matrixCoefficients,
+            byte videoFullRangeFlag,
+            float intensityTargetNits)
+        {
+            try
+            {
+                CicpColorSpace cicp = new(
+                    (CicpColorPrimaries)colorPrimaries,
+                    (CicpTransferCharacteristics)transferCharacteristics,
+                    (CicpMatrixCoefficients)matrixCoefficients,
+                    (CicpVideoFullRangeFlag)videoFullRangeFlag);
+
+                if (!cicp.CanCreateColorContext && !cicp.CanColorTransformFrom)
+                {
+                    // PDN can't work with this CICP color space. Have the native decoder send
+                    // the ICC profile instead; otherwise the image would be loaded with no
+                    // color context and treated as sRGB.
+                    return SetCicpColorInfoResult.Unsupported;
+                }
+
+                if (ChannelRepresentation == JpegXLImageChannelRepresentation.Uint8 &&
+                    cicp.TransferCharacteristics
+                        is CicpTransferCharacteristics.SmpteSt2084PQ
+                        or CicpTransferCharacteristics.AribStdB67Hlg)
+                {
+                    // 8-bit HDR is not supported as an HDR document. Have the native decoder send the
+                    // ICC profile instead, so the image loads as SDR.
+                    return SetCicpColorInfoResult.Unsupported;
+                }
+
+                CicpColorSpace = cicp;
+                IntensityTargetNits = intensityTargetNits;
+            }
+            catch (Exception ex)
+            {
+                ExceptionInfo = ExceptionDispatchInfo.Capture(ex);
+                return SetCicpColorInfoResult.Error;
+            }
+
+            return SetCicpColorInfoResult.Ok;
         }
 
         private bool SetExif(byte* data, nuint dataLength)
@@ -267,6 +285,7 @@ namespace JpegXLFileTypePlugin.Interop
             if (disposing)
             {
                 DisposableUtil.Free(ref layerData);
+                DisposableUtil.Free(ref colorContext);
                 DisposableUtil.Free(ref imagingFactory);
             }
 
