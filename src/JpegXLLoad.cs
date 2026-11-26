@@ -13,308 +13,159 @@
 using JpegXLFileTypePlugin.Exif;
 using JpegXLFileTypePlugin.Interop;
 using PaintDotNet;
-using PaintDotNet.Direct2D1;
-using PaintDotNet.Direct2D1.Effects;
-using PaintDotNet.Dxgi;
+using PaintDotNet.FileTypes;
 using PaintDotNet.Imaging;
-using PaintDotNet.Rendering;
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.IO;
+using System.Linq;
 
 namespace JpegXLFileTypePlugin
 {
     internal static class JpegXLLoad
     {
-        public static Document Load(Stream input)
+        public static IFileTypeDocument Load(IFileTypeDocumentFactory factory, Stream input, IImagingFactory imagingFactory)
         {
-            Document doc;
-
             byte[] data = new byte[input.Length];
             input.ReadExactly(data, 0, data.Length);
 
-            using (IImagingFactory imagingFactory = ImagingFactory.CreateRef())
             using (DecoderImage decoderImage = new(imagingFactory))
             {
                 JpegXLNative.LoadImage(data, decoderImage);
 
-                doc = new Document(decoderImage.Width, decoderImage.Height);
+                DecoderLayerData decoderLayerData = decoderImage.LayerData ?? throw new FormatException("The layer data was null.");
+                IBitmap decoderLayerBitmap = decoderLayerData.Color;
 
-                SetDocumentColorProfile(decoderImage, doc, imagingFactory);
+                IColorContext? documentColorContext;
+                IBitmapSource bitmapLayerSource;
+                bool isHdrDocument = false;
+                float? contentMaxLuminanceNits = null;
 
-                AddBackgroundLayer(decoderImage, doc, imagingFactory);
+                CicpColorSpace? cicpColorSpace = decoderImage.CicpColorSpace;
+                bool isHdrTransfer = cicpColorSpace.HasValue && cicpColorSpace.Value.TransferCharacteristics 
+                    is CicpTransferCharacteristics.SmpteSt2084PQ 
+                    or CicpTransferCharacteristics.AribStdB67Hlg;
+
+                if (isHdrTransfer)
+                {
+                    CicpColorSpace cicp = cicpColorSpace!.Value;
+
+                    if (decoderImage.ChannelRepresentation == JpegXLImageChannelRepresentation.Uint8)
+                    {
+                        throw new FormatException("HDR images with 8-bit color channels are not supported.");
+                    }
+
+                    // Decode the HDR (PQ/HLG) content to linear-light and keep it as an HDR document, instead of
+                    // flattening it to SDR at load. The output is tagged with the linearized form of the gamut-
+                    // appropriate working space (e.g. BT.2020 -> BT.2020 linear), and the document is flagged as
+                    // HDR so Paint.NET tone-maps it when importing as or exporting to SDR.
+                    using IColorContext recommendedColorContext = imagingFactory.CreateColorContext(cicp.RecommendedColorSpace);
+                    documentColorContext = imagingFactory.TryCreateLinearizedColorContext(recommendedColorContext);
+                    if (documentColorContext is null)
+                    {
+                        // If for some reason the color context can't be linearized (shouldn't be possible), fallback to scRGB.
+                        documentColorContext = imagingFactory.CreateColorContext(CicpColorSpaces.ScRgb);
+                    }
+
+                    bitmapLayerSource = decoderLayerBitmap.CreateColorTransformer<ColorRgba128Float>(cicp, documentColorContext);
+                    isHdrDocument = true;
+
+                    // The JPEG XL intensity target is the peak content luminance (like an AVIF MaxCLL). Use it as the
+                    // content light level when it is a specific HDR value; the PQ default of 10000 nits (the container
+                    // maximum, not the actual content peak) is treated as unknown so that Paint.NET measures the peak
+                    // itself.
+                    float intensityTarget = decoderImage.IntensityTargetNits;
+                    if (intensityTarget > 0.0f && intensityTarget < 10000.0f)
+                    {
+                        contentMaxLuminanceNits = intensityTarget;
+                    }
+                }
+                else if (cicpColorSpace.HasValue &&
+                    cicpColorSpace.Value.CanCreateColorContext &&
+                    factory.SupportedPixelFormats.Contains(decoderLayerBitmap.PixelFormat))
+                {
+                    // SDR CICP + CanCreateColorContext: the pixels are already in this color space, so just tag them
+                    // with a matching color profile synthesized from the CICP code points.
+                    documentColorContext = imagingFactory.CreateColorContext(cicpColorSpace.Value);
+                    bitmapLayerSource = decoderLayerBitmap.CreateRef();
+                }
+                else if (cicpColorSpace.HasValue &&
+                    cicpColorSpace.Value.CanColorTransformFrom &&
+                    factory.SupportedPixelFormats.Contains(decoderLayerBitmap.PixelFormat))
+                {
+                    // SDR CICP + CanColorTransformFrom: the pixels need to be transformed to a color space that is ICC compatible.
+                    // This shouldn't happen in practice, but I'm including this for robustness.
+                    documentColorContext = imagingFactory.CreateColorContext(cicpColorSpace.Value.RecommendedColorSpace);
+                    bitmapLayerSource = decoderLayerBitmap.CreateColorTransformer(cicpColorSpace.Value, documentColorContext, decoderLayerBitmap.PixelFormat);
+                }
+                else if (factory.SupportedPixelFormats.Contains(decoderLayerBitmap.PixelFormat))
+                {
+                    // Gray (KnownColorProfile), an embedded ICC profile, or an untagged image: use whatever
+                    // color context the decoder produced. This also covers CMYK (converted to RGB earlier).
+                    documentColorContext = decoderImage.TryGetColorContext();
+                    bitmapLayerSource = decoderLayerBitmap.CreateRef();
+                }
+                else
+                {
+                    if (cicpColorSpace.HasValue)
+                    {
+                        throw new FormatException($"Unsupported format: {decoderImage.ColorSpace}, {decoderImage.ChannelRepresentation}, CICP: {cicpColorSpace.Value}");
+                    }
+                    else
+                    {
+                        throw new FormatException($"Unsupported format: {decoderImage.ColorSpace}, {decoderImage.ChannelRepresentation}");
+                    }
+                }
+
+                IFileTypeDocument document = factory.CreateDocument(bitmapLayerSource.Size, bitmapLayerSource.PixelFormat);
 
                 ExifValueCollection? exifValues = decoderImage.TryGetExif();
-
                 if (exifValues != null)
                 {
-                    foreach (KeyValuePair<ExifPropertyPath, ExifValue> item in exifValues)
+                    using (var exifTx = document.Metadata.Exif.CreateTransaction())
                     {
-                        ExifPropertyPath path = item.Key;
-
-                        doc.Metadata.AddExifPropertyItem(path.Section, path.TagID, item.Value);
+                        exifTx.SetItems(exifValues);
                     }
                 }
 
                 XmpPacket? xmpPacket = decoderImage.GetXmp();
-
-                if (xmpPacket != null)
+                using (var xmpTx = document.Metadata.Xmp.CreateTransaction())
                 {
-                    doc.Metadata.SetXmpPacket(xmpPacket);
+                    xmpTx.XmpPacket = xmpPacket;
                 }
-            }
 
-            return doc;
-        }
-
-        private static void AddBackgroundLayer(DecoderImage decoderImage, Document doc, IImagingFactory imagingFactory)
-        {
-            DecoderLayerData layerData = decoderImage.LayerData ?? throw new FormatException("The layer data was null.");
-
-            BitmapLayer bitmapLayer = Layer.CreateBackgroundLayer(decoderImage.Width, decoderImage.Height);
-
-            if (!string.IsNullOrWhiteSpace(layerData.Name))
-            {
-                bitmapLayer.Name = layerData.Name;
-            }
-
-            Surface surface = bitmapLayer.Surface;
-
-            switch (decoderImage.ColorSpace)
-            {
-                case JpegXLColorSpace.Cmyk:
-                    SetLayerColorDataFromCmykImage(layerData.Color,
-                                                   decoderImage.TryGetColorContext(),
-                                                   surface,
-                                                   imagingFactory);
-                    break;
-                case JpegXLColorSpace.Gray:
-                case JpegXLColorSpace.Rgb:
-                    // Gray images are loaded as RGB due to WIC having poor support for gray to RGB format conversions.
-                    // WIC was throwing an exception when trying to convert from a gray color profile to a RGB color profile.
-                    SetLayerColorDataFromRgbImage(layerData.Color,
-                                                  decoderImage.ChannelRepresentation,
-                                                  decoderImage.HdrFormat,
-                                                  surface);
-                    break;
-                default:
-                    throw new InvalidOperationException($"Unknown {nameof(JpegXLColorSpace)} value: {decoderImage.ColorSpace}.");
-            }
-
-            if (layerData.Transparency != null)
-            {
-                SetLayerTransparency(layerData.Transparency!, surface);
-            }
-            else
-            {
-                PixelKernels.SetAlphaChannel(surface.AsRegionPtr().Cast<ColorBgra32>(), ColorAlpha8.Opaque);
-            }
-
-            doc.Layers.Add(bitmapLayer);
-        }
-
-        private static void SetDocumentColorProfile(DecoderImage decoderImage, Document doc, IImagingFactory imagingFactory)
-        {
-            JpegXLColorSpace colorSpace = decoderImage.ColorSpace;
-
-            if (colorSpace == JpegXLColorSpace.Gray || colorSpace == JpegXLColorSpace.Rgb)
-            {
-                // Gray images are loaded as RGB due to WIC having poor support for gray to RGB format conversions.
-                // WIC was throwing an exception when trying to convert from a gray color profile to a RGB color profile.
-                // The color profiles will always be RGB, even if the original image was gray.
-                // If the gray image has an ICC profile, it will be ignored.
-
-                IColorContext? colorContext = decoderImage.TryGetColorContext();
-
-                if (colorContext != null)
+                if (documentColorContext is not null)
                 {
-                    doc.SetColorContext(colorContext);
+                    document.SetColorContext(documentColorContext);
                 }
-            }
-            else if (colorSpace == JpegXLColorSpace.Cmyk)
-            {
-                // https://discord.com/channels/143867839282020352/960223751599976479/1167941100976222360
-                // Clinton Ingram (saucecontrol) recommends using Adobe RGB for CMYK data that is converted to RGB.
-                using (IColorContext colorContext = imagingFactory.CreateColorContext(PaintDotNet.Imaging.ExifColorSpace.AdobeRgb))
-                {
-                    doc.SetColorContext(colorContext);
-                }
-            }
-        }
 
-        private static unsafe void SetLayerColorDataFromCmykImage(IBitmap color,
-                                                                  IColorContext? sourceColorContext,
-                                                                  Surface surface,
-                                                                  IImagingFactory imagingFactory)
-        {
-            if (sourceColorContext != null)
-            {
-                // https://discord.com/channels/143867839282020352/960223751599976479/1167941100976222360
-                // Clinton Ingram (saucecontrol) recommends using Adobe RGB for CMYK data that is converted to RGB.
-                PaintDotNet.Imaging.ExifColorSpace dstColorSpace = PaintDotNet.Imaging.ExifColorSpace.AdobeRgb;
-
-                using (IColorContext dstColorContext = imagingFactory.CreateColorContext(dstColorSpace))
-                using (IBitmapSource<ColorRgb24> convertedBitmapSource = imagingFactory.CreateColorTransformedBitmap<ColorRgb24>(color,
-                                                                                                                                 sourceColorContext,
-                                                                                                                                 dstColorContext))
+                if (isHdrDocument)
                 {
-                    using (IBitmap<ColorRgb24> convertedBitmap = convertedBitmapSource.ToBitmap())
+                    using (var hdrTx = document.Metadata.Hdr.CreateTransaction())
                     {
-                        SetLayerColorDataFromRgbImage(convertedBitmap, surface);
+                        hdrTx.IsHdrDocument = true;
+
+                        // From the JPEG XL intensity target, when it was a specific value; otherwise null so
+                        // Paint.NET measures the content peak itself. SceneReferredSdrWhiteLevelNits keeps its
+                        // default (80 nits).
+                        hdrTx.ContentMaxLuminanceNits = contentMaxLuminanceNits;
                     }
                 }
-            }
-            else
-            {
-                throw new FormatException("A CMYK image must have a valid ICC profile.");
-            }
-        }
 
-        private static unsafe void SetLayerColorDataFromRgbImage(IBitmap color,
-                                                                 JpegXLImageChannelRepresentation imageChannelRepresentation,
-                                                                 HdrFormat hdrFormat,
-                                                                 Surface surface)
-        {
-            if (hdrFormat == HdrFormat.None)
-            {
-                switch (imageChannelRepresentation)
+                using IFileTypeBitmapLayer bitmapLayer = document.CreateBitmapLayer();
+                document.Layers.Add(bitmapLayer);
+
+                if (!string.IsNullOrWhiteSpace(decoderLayerData.Name))
                 {
-                    case JpegXLImageChannelRepresentation.Uint8:
-                        SetLayerColorDataFromRgbImage(color.Cast<ColorRgb24>(), surface);
-                        break;
-                    case JpegXLImageChannelRepresentation.Uint16:
-                    case JpegXLImageChannelRepresentation.Float16:
-                    case JpegXLImageChannelRepresentation.Float32:
-                        SetLayerColorDataFromSdrImage(color, surface);
-                        break;
-                    default:
-                        throw new InvalidEnumArgumentException(nameof(imageChannelRepresentation),
-                                                               (int)imageChannelRepresentation,
-                                                               typeof(JpegXLImageChannelRepresentation));
+                    bitmapLayer.Name = decoderLayerData.Name;
                 }
-            }
-            else if (hdrFormat == HdrFormat.PQ)
-            {
-                switch (imageChannelRepresentation)
-                {
-                    case JpegXLImageChannelRepresentation.Uint16:
-                    case JpegXLImageChannelRepresentation.Float16:
-                    case JpegXLImageChannelRepresentation.Float32:
-                        SetLayerColorDataFromHdrPQImage(color, surface);
-                        break;
-                    case JpegXLImageChannelRepresentation.Uint8:
-                    default:
-                        throw new InvalidEnumArgumentException(nameof(imageChannelRepresentation),
-                                                               (int)imageChannelRepresentation,
-                                                               typeof(JpegXLImageChannelRepresentation));
-                }
-            }
-            else
-            {
-                throw new InvalidOperationException($"Unsupported {nameof(hdrFormat)} value: {hdrFormat}.");
-            }
-        }
 
-        private static unsafe void SetLayerColorDataFromRgbImage(IBitmap<ColorRgb24> color, Surface surface)
-        {
-            CopyFromBitmapChunked(color, surface, (srcRegion, destRegion) =>
-            {
-                int width = destRegion.Width;
-                int height = destRegion.Height;
+                using IFileTypeBitmapSink bitmapLayerSink = bitmapLayer.GetBitmap();
+                bitmapLayerSink.WriteSource(bitmapLayerSource);
 
-                for (int y = 0; y < height; y++)
-                {
-                    ColorRgb24* src = srcRegion.Rows[y].Ptr;
-                    ColorBgra32* dst = destRegion.Rows[y].Ptr;
+                documentColorContext?.Dispose();
+                bitmapLayerSource.Dispose();
 
-                    for (int x = 0; x < width; x++)
-                    {
-                        dst->R = src->R;
-                        dst->G = src->G;
-                        dst->B = src->B;
-                        src++;
-                        dst++;
-                    }
-                }
-            });
-        }
-
-        private static unsafe void SetLayerTransparency(IBitmap<ColorAlpha8> transparency, Surface surface)
-        {
-            CopyFromBitmapChunked(transparency, surface, (srcRegion, destRegion) =>
-            {
-                PixelKernels.ReplaceChannel(destRegion, srcRegion.Cast<byte>(), 3);
-            });
-        }
-
-        private static unsafe void CopyFromBitmapChunked<TPixel>(IBitmap<TPixel> source,
-                                                                 Surface destination,
-                                                                 Action<RegionPtr<TPixel>, RegionPtr<ColorBgra32>> copyAction)
-            where TPixel : unmanaged, INaturalPixelInfo
-        {
-            RegionPtr<ColorBgra32> surfaceRegion = destination.AsRegionPtr().Cast<ColorBgra32>();
-
-            foreach (RectInt32 copyRect in BitmapUtil2.EnumerateLockRects(source))
-            {
-                RegionPtr<ColorBgra32> destRegion = surfaceRegion.Slice(copyRect);
-
-                using (IBitmapLock<TPixel> bitmapLock = source.Lock(copyRect, BitmapLockOptions.Read))
-                {
-                    copyAction(bitmapLock.AsRegionPtr(), destRegion);
-                }
-            }
-        }
-
-        private static void SetLayerColorDataFromHdrPQImage(IBitmap source, Surface destination)
-        {
-            using (IImagingFactory imagingFactory = ImagingFactory.CreateRef())
-            using (IColorContext dp3ColorContext = imagingFactory.CreateColorContext(KnownColorSpace.DisplayP3))
-            using (IDirect2DFactory d2dFactory = Direct2DFactory.Create())
-            {
-                using (IBitmapSource<ColorPbgra32> dp3Image = PQToColorContext(source,
-                                                                               imagingFactory,
-                                                                               d2dFactory,
-                                                                               dp3ColorContext))
-                {
-                    dp3Image.CopyPixels(destination.AsRegionPtr().Cast<ColorPbgra32>());
-                }
-            }
-
-            static IBitmapSource<ColorPbgra32> PQToColorContext(
-                IBitmapSource bitmap,
-                IImagingFactory imagingFactory,
-                IDirect2DFactory d2dFactory,
-                IColorContext colorContext)
-            {
-                return d2dFactory.CreateBitmapSourceFromImage<ColorPbgra32>(
-                    bitmap.Size,
-                    DevicePixelFormats.Prgba128Float,
-                    delegate (IDeviceContext dc)
-                    {
-                        dc.EffectBufferPrecision = BufferPrecision.Float32;
-                        using IDeviceImage srcImage = dc.CreateImageFromBitmap(bitmap, null, BitmapImageOptions.UseStraightAlpha);
-                        using IDeviceColorContext srcColorContext = dc.CreateColorContext(DxgiColorSpace.RgbFullGamma2084NoneP2020);
-                        using IDeviceColorContext dstColorContext = dc.CreateColorContext(colorContext);
-
-                        ColorManagementEffect colorMgmtEffect = new(
-                            dc,
-                            srcImage,
-                            srcColorContext,
-                            dstColorContext,
-                            ColorManagementAlphaMode.Straight);
-
-                        return colorMgmtEffect;
-                    });
-            }
-        }
-
-        private static void SetLayerColorDataFromSdrImage(IBitmap source, Surface destination)
-        {
-            using (IBitmapSource<ColorRgb24> convertedImage = source.CreateFormatConverter<ColorRgb24>())
-            using (IBitmap<ColorRgb24> asBitmap = convertedImage.ToBitmap())
-            {
-                SetLayerColorDataFromRgbImage(asBitmap, destination);
+                return document;
             }
         }
     }

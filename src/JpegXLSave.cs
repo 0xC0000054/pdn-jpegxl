@@ -13,7 +13,7 @@
 using JpegXLFileTypePlugin.Exif;
 using JpegXLFileTypePlugin.Interop;
 using PaintDotNet;
-using PaintDotNet.Collections;
+using PaintDotNet.FileTypes;
 using PaintDotNet.Imaging;
 using PaintDotNet.Rendering;
 using System;
@@ -27,16 +27,16 @@ namespace JpegXLFileTypePlugin
 {
     internal static class JpegXLSave
     {
-        public static unsafe void Save(Document input,
+        public static unsafe void Save(IReadOnlyFileTypeDocument input,
                                        Stream output,
-                                       Surface scratchSurface,
                                        ProgressEventHandler progressEventHandler,
                                        int quality,
                                        bool lossless,
                                        int effort)
         {
-            scratchSurface.Clear();
-            input.CreateRenderer().Render(scratchSurface);
+            // TODO: support more pixel formats
+            using IFileTypeCompositeBitmap<ColorBgra32> compositeBitmap = input.GetCompositeBitmap<ColorBgra32>();
+            using IFileTypeBitmapLock<ColorBgra32> compositeLock = compositeBitmap.Lock();
 
             ProgressCallback? progressCallback = null;
 
@@ -59,34 +59,46 @@ namespace JpegXLFileTypePlugin
             EncoderOptions options = new(quality, lossless, effort);
             EncoderImageMetadata metadata = CreateImageMetadata(input);
 
-            JpegXLNative.SaveImage(scratchSurface, options, metadata, progressCallback, output);
+            JpegXLNative.SaveImage(compositeLock.AsRegionPtr(), options, metadata, progressCallback, output);
         }
 
-        private static EncoderImageMetadata CreateImageMetadata(Document input)
+        private static EncoderImageMetadata CreateImageMetadata(IReadOnlyFileTypeDocument input)
         {
             byte[]? exifBytes = null;
             byte[]? iccProfileBytes = null;
             byte[]? xmpBytes = null;
+            CicpColorSpace? cicpColorSpace = null;
+            ExifColorSpace exifColorSpace;
 
-            ExifColorSpace exifColorSpace = ExifColorSpace.Srgb;
+            using IColorContext colorContext = input.GetColorContext();
 
-            IColorContext? colorContext = input.GetColorContext();
-
-            if (colorContext != null)
+            // Prefer compact CICP code points, but only when they reproduce the color context exactly.
+            // This keeps standard wide-gamut spaces losslessly tagged while preserving the exact ICC
+            // profile for anything that does not round-trip (e.g. Adobe RGB, or an off-standard variant of
+            // a standard space, where writing CICP could shift some pixels).
+            // CanCreateColorContext filters out code points that cannot be expressed as an ICC profile
+            // (PQ/HLG transfers, non-identity matrix, narrow range), which a profile's embedded cicp tag
+            // could otherwise carry through the exact match.
+            if (colorContext.TryGetCicpColorSpaceExact(out CicpColorSpace cicp) &&
+                cicp != CicpColorSpaces.Srgb &&
+                cicp.CanCreateColorContext &&
+                IsNativeExpressible(cicp))
+            {
+                cicpColorSpace = cicp;
+                exifColorSpace = ExifColorSpace.Uncalibrated;
+            }
+            else if (colorContext.Type != ColorContextType.ExifColorSpace ||
+                colorContext.ExifColorSpace != PaintDotNet.Imaging.ExifColorSpace.Srgb)
             {
                 // We do not set an ICC profile for sRGB images as JpegXL can signal that
                 // using its built-in color space encoding, and sRGB is the default for
                 // images without an ICC profile.
-                if (colorContext.Type != ColorContextType.ExifColorSpace
-                    || colorContext.ExifColorSpace != PaintDotNet.Imaging.ExifColorSpace.Srgb)
-                {
-                    iccProfileBytes = colorContext.GetProfileBytes().ToArray();
-
-                    if (iccProfileBytes.Length > 0)
-                    {
-                        exifColorSpace = ExifColorSpace.Uncalibrated;
-                    }
-                }
+                iccProfileBytes = colorContext.GetProfileBytes().ToArray();
+                exifColorSpace = (iccProfileBytes.Length > 0) ? ExifColorSpace.Uncalibrated : ExifColorSpace.Srgb;
+            }
+            else
+            {
+                exifColorSpace = ExifColorSpace.Srgb;
             }
 
             Dictionary<ExifPropertyPath, ExifValue>? propertyItems = GetExifMetadataFromDocument(input);
@@ -95,18 +107,18 @@ namespace JpegXLFileTypePlugin
             {
                 propertyItems.Remove(ExifPropertyKeys.Image.InterColorProfile.Path);
 
-                if (iccProfileBytes != null)
+                if (exifColorSpace == ExifColorSpace.Uncalibrated)
                 {
                     // Remove the InteroperabilityIndex and related tags, these tags should
-                    // not be written if the image has an ICC color profile.
+                    // not be written if the image has a non-sRGB color space (ICC or CICP).
                     propertyItems.Remove(ExifPropertyKeys.Interop.InteroperabilityIndex.Path);
                     propertyItems.Remove(ExifPropertyKeys.Interop.InteroperabilityVersion.Path);
                 }
 
-                exifBytes = new ExifWriter(input, propertyItems, exifColorSpace).CreateExifBlob();
+                exifBytes = new ExifWriter(input.Size, propertyItems, exifColorSpace).CreateExifBlob();
             }
 
-            XmpPacket? xmpPacket = input.Metadata.TryGetXmpPacket();
+            XmpPacket? xmpPacket = input.Metadata.Xmp.XmpPacket;
 
             if (xmpPacket != null)
             {
@@ -115,26 +127,42 @@ namespace JpegXLFileTypePlugin
                 xmpBytes = Encoding.UTF8.GetBytes(xmpPacketAsString);
             }
 
-            return new EncoderImageMetadata(exifBytes, iccProfileBytes, xmpBytes);
+            return new EncoderImageMetadata(exifBytes, iccProfileBytes, xmpBytes, cicpColorSpace);
         }
 
-        private static Dictionary<ExifPropertyPath, ExifValue>? GetExifMetadataFromDocument(Document doc)
+        // Whether the native encoder can build a JxlColorEncoding for this CICP color space.
+        // Kept in sync with BuildColorEncodingFromCicp in the native JxlEncoder.
+        private static bool IsNativeExpressible(CicpColorSpace cicp)
         {
-            Dictionary<ExifPropertyPath, ExifValue>? items = null;
+            bool primariesExpressible = cicp.ColorPrimaries 
+                is CicpColorPrimaries.Bt709
+                or CicpColorPrimaries.Bt2020
+                or CicpColorPrimaries.Smpte431
+                or CicpColorPrimaries.Smpte432;
 
-            ExifPropertyItem[] exifProperties = doc.Metadata.GetExifPropertyItems();
+            bool transferExpressible = cicp.TransferCharacteristics 
+                is CicpTransferCharacteristics.Bt709
+                or CicpTransferCharacteristics.Bt601
+                or CicpTransferCharacteristics.Bt2020TenBit
+                or CicpTransferCharacteristics.Bt2020TwelveBit
+                or CicpTransferCharacteristics.Linear
+                or CicpTransferCharacteristics.Srgb
+                or CicpTransferCharacteristics.SmpteSt2084PQ
+                or CicpTransferCharacteristics.AribStdB67Hlg;
 
-            if (exifProperties.Length > 0)
+            return primariesExpressible && transferExpressible;
+        }
+
+        private static Dictionary<ExifPropertyPath, ExifValue>? GetExifMetadataFromDocument(IReadOnlyFileTypeDocument doc)
+        {
+            Dictionary<ExifPropertyPath, ExifValue> items = new();
+
+            foreach (ExifPropertyItem property in doc.Metadata.Exif.Items)
             {
-                items = new Dictionary<ExifPropertyPath, ExifValue>(exifProperties.Length);
-
-                foreach (ExifPropertyItem property in exifProperties)
-                {
-                    items.TryAdd(property.Path, property.Value);
-                }
+                items.TryAdd(property.Path, property.Value);
             }
 
-            return items;
+            return items.Count == 0 ? null : items;
         }
     }
 }

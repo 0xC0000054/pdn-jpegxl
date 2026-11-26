@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFramework>net11.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <Platforms>AnyCPU</Platforms>
     <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
@@ -26,18 +26,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Remove="ColorProfiles\Gray-elle-V4-g10.icc" />
-    <None Remove="ColorProfiles\Gray-elle-V4-srgbtrc.icc" />
-    <None Remove="ColorProfiles\Rec2020-elle-V4-g10.icc" />
-    <None Remove="ColorProfiles\Rec709-elle-V4-rec709.icc" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="ColorProfiles\Rec2020-elle-V4-g10.icc" />
-    <EmbeddedResource Include="ColorProfiles\Rec709-elle-V4-rec709.icc" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Reference Include="PaintDotNet.Base">
       <HintPath>..\..\..\Program Files\paint.net\PaintDotNet.Base.dll</HintPath>
     </Reference>
@@ -47,8 +35,8 @@
     <Reference Include="PaintDotNet.Core">
       <HintPath>..\..\..\Program Files\paint.net\PaintDotNet.Core.dll</HintPath>
     </Reference>
-    <Reference Include="PaintDotNet.Data">
-      <HintPath>..\..\..\Program Files\paint.net\PaintDotNet.Data.dll</HintPath>
+    <Reference Include="PaintDotNet.FileTypes">
+      <HintPath>..\..\..\Program Files\paint.net\PaintDotNet.FileTypes.dll</HintPath>
     </Reference>
     <Reference Include="PaintDotNet.Framework">
       <HintPath>..\..\..\Program Files\paint.net\PaintDotNet.Framework.dll</HintPath>

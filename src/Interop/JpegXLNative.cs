@@ -11,6 +11,7 @@
 ////////////////////////////////////////////////////////////////////////
 
 using PaintDotNet;
+using PaintDotNet.Imaging;
 using System;
 using System.IO;
 using System.Runtime.ExceptionServices;
@@ -81,7 +82,7 @@ namespace JpegXLFileTypePlugin.Interop
             }
         }
 
-        internal static unsafe void SaveImage(Surface surface,
+        internal static unsafe void SaveImage(RegionPtr<ColorBgra32> sourceRegion,
                                               EncoderOptions options,
                                               EncoderImageMetadata metadata,
                                               ProgressCallback? progressCallback,
@@ -93,10 +94,10 @@ namespace JpegXLFileTypePlugin.Interop
 
             BitmapData bitmapData = new()
             {
-                scan0 = (byte*)surface.Scan0.VoidStar,
-                width = (uint)surface.Width,
-                height = (uint)surface.Height,
-                stride = (uint)surface.Stride
+                scan0 = (byte*)sourceRegion.Ptr,
+                width = (uint)sourceRegion.Width,
+                height = (uint)sourceRegion.Height,
+                stride = (uint)sourceRegion.Stride
             };
 
             ErrorInfo errorInfo;

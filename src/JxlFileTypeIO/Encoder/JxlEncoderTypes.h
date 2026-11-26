@@ -39,4 +39,11 @@ struct EncoderImageMetadata
     size_t iccProfileSize;
     uint8_t* xmp;
     size_t xmpSize;
+    // The image color space as CICP code points (ITU-T H.273). When hasCicpColorInfo is true these are used
+    // to build an enumerated JxlColorEncoding, in preference to an embedded ICC profile.
+    bool hasCicpColorInfo;
+    uint8_t cicpColorPrimaries;
+    uint8_t cicpTransferCharacteristics;
+    uint8_t cicpMatrixCoefficients;
+    uint8_t cicpVideoFullRangeFlag;
 };

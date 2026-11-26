@@ -31,34 +31,52 @@ namespace JpegXLFileTypePlugin.Interop
                 public nuint iccProfileSize;
                 public void* xmp;
                 public nuint xmpSize;
+                public byte hasCicpColorInfo;
+                public byte cicpColorPrimaries;
+                public byte cicpTransferCharacteristics;
+                public byte cicpMatrixCoefficients;
+                public byte cicpVideoFullRangeFlag;
             }
 
             public static Native ConvertToUnmanaged(EncoderImageMetadata managed)
             {
                 Native native = new();
 
-                if (managed.iccProfile.Length > 0)
-                {
-                    native.iccProfile = NativeMemory.Alloc((uint)managed.iccProfile.Length);
-                    managed.iccProfile.Span.CopyTo(new Span<byte>((byte*)native.iccProfile, managed.iccProfile.Length));
-                    native.iccProfileSize = (uint)managed.iccProfile.Length;
-                }
+                native.hasCicpColorInfo = managed.hasCicpColorInfo ? (byte)1 : (byte)0;
+                native.cicpColorPrimaries = managed.cicpColorPrimaries;
+                native.cicpTransferCharacteristics = managed.cicpTransferCharacteristics;
+                native.cicpMatrixCoefficients = managed.cicpMatrixCoefficients;
+                native.cicpVideoFullRangeFlag = managed.cicpVideoFullRangeFlag;
 
-                if (managed.exif.Length > 0)
+                try
                 {
-                    native.exif = NativeMemory.Alloc((uint)managed.exif.Length);
-                    managed.exif.Span.CopyTo(new Span<byte>((byte*)native.exif, managed.exif.Length));
-                    native.exifSize = (uint)managed.exif.Length;
+                    native.iccProfile = AllocAndCopy(managed.iccProfile, out native.iccProfileSize);
+                    native.exif = AllocAndCopy(managed.exif, out native.exifSize);
+                    native.xmp = AllocAndCopy(managed.xmp, out native.xmpSize);
                 }
-
-                if (managed.xmp.Length > 0)
+                catch (Exception)
                 {
-                    native.xmp = NativeMemory.Alloc((uint)managed.xmp.Length);
-                    managed.xmp.Span.CopyTo(new Span<byte>((byte*)native.xmp, managed.xmp.Length));
-                    native.xmpSize = (uint)managed.xmp.Length;
+                    // The generated stub only calls Free after ConvertToUnmanaged returns successfully,
+                    // so any earlier allocations would leak if a later Alloc throws.
+                    Free(native);
+                    throw;
                 }
 
                 return native;
+            }
+
+            private static void* AllocAndCopy(ReadOnlyMemory<byte> data, out nuint size)
+            {
+                if (data.Length == 0)
+                {
+                    size = 0;
+                    return null;
+                }
+
+                void* block = NativeMemory.Alloc((uint)data.Length);
+                data.Span.CopyTo(new Span<byte>((byte*)block, data.Length));
+                size = (uint)data.Length;
+                return block;
             }
 
             public static void Free(Native native)
